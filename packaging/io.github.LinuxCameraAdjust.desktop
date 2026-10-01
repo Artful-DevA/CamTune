@@ -1,0 +1,25 @@
+[Desktop Entry]
+Type=Application
+Name=Camera Adjust
+GenericName=Webcam Controls
+Comment=Webcam controls, framing and a low-latency virtual camera for video calls
+Exec=camadjust
+Icon=io.github.LinuxCameraAdjust
+Terminal=false
+Categories=AudioVideo;Video;Utility;
+Keywords=webcam;camera;v4l2;virtual camera;zoom;video call;
+StartupNotify=true
+SingleMainWindow=true
+Actions=Normal;CloseUp;ToggleVirtualCamera;
+
+[Desktop Action Normal]
+Name=Preset 1
+Exec=camadjust --preset 1
+
+[Desktop Action CloseUp]
+Name=Preset 3
+Exec=camadjust --preset 3
+
+[Desktop Action ToggleVirtualCamera]
+Name=Toggle virtual camera
+Exec=camadjust --virtual-camera toggle

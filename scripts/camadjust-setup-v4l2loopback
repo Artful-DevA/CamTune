@@ -1,0 +1,98 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Sets up the v4l2loopback virtual camera for Camera Adjust.
+# Run as root (the application uses pkexec):
+#
+#   camadjust-setup-v4l2loopback            load module + make persistent
+#   camadjust-setup-v4l2loopback --install  also install the module package
+#   camadjust-setup-v4l2loopback --remove   remove the persistent configuration
+#
+# Module options:
+#   exclusive_caps=1  required by Chromium/WebRTC based apps (Meet, Teams web,
+#                     Discord) to list the device as a camera
+#   max_buffers=2     keeps the loopback queue short (low latency)
+#   card_label        the name shown in camera pickers
+
+set -eu
+
+LABEL="Camera Adjust"
+VIDEO_NR=42
+OPTIONS="devices=1 video_nr=${VIDEO_NR} card_label=\"${LABEL}\" exclusive_caps=1 max_buffers=2"
+MODPROBE_CONF=/etc/modprobe.d/camadjust-v4l2loopback.conf
+LOAD_CONF=/etc/modules-load.d/camadjust-v4l2loopback.conf
+
+say() { printf '%s\n' "$*"; }
+die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
+
+[ "$(id -u)" -eq 0 ] || die "this script must run as root (try: sudo $0)"
+
+install_package() {
+    if command -v apt-get >/dev/null 2>&1; then
+        say "Installing v4l2loopback-dkms with apt…"
+        DEBIAN_FRONTEND=noninteractive apt-get install -y v4l2loopback-dkms
+    elif command -v dnf >/dev/null 2>&1; then
+        say "Installing v4l2loopback with dnf (requires RPM Fusion free)…"
+        if ! dnf install -y v4l2loopback; then
+            die "could not install v4l2loopback. Enable RPM Fusion: https://rpmfusion.org/Configuration"
+        fi
+        # akmods builds the module for the running kernel.
+        if command -v akmods >/dev/null 2>&1; then
+            akmods --force || true
+        fi
+    elif command -v zypper >/dev/null 2>&1; then
+        zypper --non-interactive install v4l2loopback-kmp-default
+    elif command -v pacman >/dev/null 2>&1; then
+        pacman -S --noconfirm v4l2loopback-dkms
+    else
+        die "unknown package manager; install v4l2loopback manually"
+    fi
+}
+
+case "${1:-}" in
+    --remove)
+        rm -f "$MODPROBE_CONF" "$LOAD_CONF"
+        modprobe -r v4l2loopback 2>/dev/null || true
+        say "Removed the persistent virtual camera configuration."
+        exit 0
+        ;;
+    --install)
+        install_package
+        ;;
+    "") ;;
+    *)
+        die "unknown option: $1"
+        ;;
+esac
+
+if ! modinfo v4l2loopback >/dev/null 2>&1; then
+    say "The v4l2loopback kernel module is not installed."
+    say "  Ubuntu/Debian: apt install v4l2loopback-dkms"
+    say "  Fedora:        enable RPM Fusion, then dnf install v4l2loopback"
+    exit 2
+fi
+
+say "Writing $MODPROBE_CONF"
+printf 'options v4l2loopback %s\n' "$OPTIONS" > "$MODPROBE_CONF"
+say "Writing $LOAD_CONF"
+printf 'v4l2loopback\n' > "$LOAD_CONF"
+
+if lsmod | grep -q '^v4l2loopback'; then
+    say "Reloading v4l2loopback with the new options…"
+    if ! modprobe -r v4l2loopback; then
+        say "The module is in use (close apps using a virtual camera, e.g. OBS)."
+        say "The new options take effect after a reboot."
+        exit 0
+    fi
+fi
+
+if ! modprobe v4l2loopback; then
+    say "Loading the module failed."
+    if command -v mokutil >/dev/null 2>&1 && mokutil --sb-state 2>/dev/null | grep -qi enabled; then
+        say "Secure Boot is enabled: the module must be signed with an enrolled key."
+        say "DKMS/akmods normally offers to enroll one (mokutil --import); reboot to complete enrollment."
+    fi
+    exit 3
+fi
+
+say "Virtual camera \"${LABEL}\" is available as /dev/video${VIDEO_NR}."
