@@ -37,6 +37,8 @@ select. It is not a recorder or streaming tool and does not try to replace OBS.
 - **Background effects without AI** – blur entire image, blur drawn regions,
   keep a drawn foreground ellipse/rectangle, fixed mask image, chroma key
   (with color picker). Replace with blur, a solid color or an image.
+  Depth-camera masking is not implemented yet (there is no common Linux depth
+  API); it would plug into the same mask compositing.
 - **Desktop integration** – system tray, start minimized, start on login,
   remembers the last camera, settings and preset, global shortcuts through the
   XDG desktop portal, a command line and a D-Bus interface for automation
@@ -180,8 +182,9 @@ Notes:
   another application” and takes it over automatically once it is released.
 - Most call apps mirror only your *self-view*; others see the picture as sent.
   Use **Mirror** only if you want everyone to see a flipped image.
-- Changing the output resolution while an app is using the virtual camera is
-  deferred: the current size is kept until the app releases the device.
+- Changing the output resolution while an app is using the virtual camera
+  keeps the current size (the app keeps working). To switch, stop the camera in
+  that app, then turn the virtual camera off and on.
 - Flatpak/Snap apps need device access (`--device=all` for Flatpak).
 
 ## Command line and automation

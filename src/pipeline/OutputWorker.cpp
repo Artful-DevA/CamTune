@@ -162,7 +162,8 @@ void OutputWorker::run()
                     if (adopted)
                         msg = "Another application is using the virtual camera at " + std::to_string(m_out.width()) +
                               "×" + std::to_string(m_out.height()) +
-                              "; that size is kept until it stops using the camera.";
+                              "; keeping that size. To change it, stop the camera in that application, then "
+                              "turn the virtual camera off and on.";
                     setState(OutputState::Active, msg);
                 } else {
                     setState(OutputState::Error, err);

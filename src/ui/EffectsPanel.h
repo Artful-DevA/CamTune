@@ -3,14 +3,12 @@
 
 #include <QWidget>
 
-class QCheckBox;
 class QComboBox;
 class QGridLayout;
 class QLabel;
 class QLineEdit;
 class QListWidget;
 class QPushButton;
-class QStackedWidget;
 
 namespace app {
 class CameraController;
@@ -63,9 +61,6 @@ private:
     SliderRow *m_similarity;
     SliderRow *m_smoothness;
     QLabel *m_hint;
-    QWidget *m_strengthRow;
-    QWidget *m_colorRow;
-    QWidget *m_imageRow;
     QGridLayout *m_fillGrid;
 };
 

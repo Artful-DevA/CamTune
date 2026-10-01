@@ -19,7 +19,6 @@ class GlobalShortcuts : public QObject {
 public:
     explicit GlobalShortcuts(QObject *parent = nullptr);
 
-    static bool portalAvailable();
     void enable();
     void disable();
     bool isActive() const { return !m_session.isEmpty(); }

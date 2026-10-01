@@ -325,7 +325,7 @@ QWidget *MainWindow::buildFramingSection()
     g->setContentsMargins(0, 0, 0, 0);
     g->setColumnStretch(1, 1);
     int r = 0;
-    m_zoom = new SliderRow(g, r++, tr("Zoom"), 1, 5, 1, 2, QStringLiteral("×"));
+    m_zoom = new SliderRow(g, r++, tr("Zoom"), 1, 8, 1, 2, QStringLiteral("×"));
     m_panX = new SliderRow(g, r++, tr("Pan X"), -100, 100, 0, 0, QStringLiteral(" %"));
     m_panY = new SliderRow(g, r++, tr("Pan Y"), -100, 100, 0, 0, QStringLiteral(" %"));
     m_panX->setToolTip(tr("Move the view horizontally (needs zoom or a different output aspect ratio)"));

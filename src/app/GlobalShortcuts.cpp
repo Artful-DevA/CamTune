@@ -3,7 +3,6 @@
 
 #include <QDBusArgument>
 #include <QDBusConnection>
-#include <QDBusConnectionInterface>
 #include <QDBusMessage>
 #include <QDBusMetaType>
 #include <QDBusPendingCall>
@@ -58,19 +57,6 @@ GlobalShortcuts::GlobalShortcuts(QObject *parent) : QObject(parent)
     qDBusRegisterMetaType<PortalShortcutList>();
 }
 
-bool GlobalShortcuts::portalAvailable()
-{
-    auto bus = QDBusConnection::sessionBus();
-    if (!bus.isConnected() || !bus.interface()->isServiceRegistered(kPortalService))
-        return false;
-    QDBusMessage msg = QDBusMessage::createMethodCall(kPortalService, kPortalPath,
-                                                      QStringLiteral("org.freedesktop.DBus.Properties"),
-                                                      QStringLiteral("Get"));
-    msg << kShortcutsIface << QStringLiteral("version");
-    QDBusMessage reply = bus.call(msg, QDBus::Block, 1500);
-    return reply.type() == QDBusMessage::ReplyMessage;
-}
-
 QString GlobalShortcuts::requestPath(const QString &tok) const
 {
     QString sender = QDBusConnection::sessionBus().baseService().mid(1).replace(QLatin1Char('.'), QLatin1Char('_'));
@@ -88,12 +74,14 @@ void GlobalShortcuts::enable()
     m_wanted = true;
     if (!m_session.isEmpty())
         return;
-    if (!portalAvailable()) {
-        setStatus(tr("The desktop portal does not offer global shortcuts here. Bind keys to commands such "
-                     "as “camadjust --preset 1” in your desktop's keyboard settings instead."));
+    const QString unavailable =
+        tr("The desktop portal does not offer global shortcuts here. Bind keys to commands such "
+           "as “camadjust --preset 1” in your desktop's keyboard settings instead.");
+    auto bus = QDBusConnection::sessionBus();
+    if (!bus.isConnected()) {
+        setStatus(unavailable);
         return;
     }
-    auto bus = QDBusConnection::sessionBus();
     const QString handleToken = token();
     // Subscribe to the response before making the call to avoid a race.
     bus.connect(kPortalService, requestPath(handleToken), kRequestIface, QStringLiteral("Response"), this,
@@ -102,7 +90,13 @@ void GlobalShortcuts::enable()
                                                       QStringLiteral("CreateSession"));
     msg << QVariantMap{{QStringLiteral("handle_token"), handleToken},
                        {QStringLiteral("session_handle_token"), token()}};
-    bus.asyncCall(msg);
+    // Fully asynchronous: a missing or slow portal must never stall the UI.
+    auto *watcher = new QDBusPendingCallWatcher(bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, unavailable](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        if (w->isError())
+            setStatus(unavailable);
+    });
     setStatus(tr("Requesting global shortcuts from the desktop…"));
 }
 
