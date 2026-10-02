@@ -113,7 +113,7 @@ PresetsPanel::PresetsPanel(app::Application &app, QWidget *parent) : QWidget(par
     connect(m_transition, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
             [this](double s) { m_app.settings().setPresetTransitionMs(int(s * 1000)); });
     connect(&m_app.presets(), &app::PresetStore::changed, this, &PresetsPanel::reload);
-    connect(&m_app, &app::Application::presetApplied, this, &PresetsPanel::reload);
+    connect(&m_app, &app::Application::currentPresetChanged, this, &PresetsPanel::reload);
     reload();
 }
 

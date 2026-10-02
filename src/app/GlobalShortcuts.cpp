@@ -41,7 +41,7 @@ const QDBusArgument &operator>>(const QDBusArgument &arg, PortalShortcut &s)
 
 QString token()
 {
-    return QStringLiteral("camadjust%1").arg(QRandomGenerator::global()->generate());
+    return QStringLiteral("camtune%1").arg(QRandomGenerator::global()->generate());
 }
 
 } // namespace
@@ -76,7 +76,7 @@ void GlobalShortcuts::enable()
         return;
     const QString unavailable =
         tr("The desktop portal does not offer global shortcuts here. Bind keys to commands such "
-           "as “camadjust --preset 1” in your desktop's keyboard settings instead.");
+           "as “camtune --preset 1” in your desktop's keyboard settings instead.");
     auto bus = QDBusConnection::sessionBus();
     if (!bus.isConnected()) {
         setStatus(unavailable);

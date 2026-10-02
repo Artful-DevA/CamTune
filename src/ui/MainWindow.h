@@ -9,13 +9,15 @@
 #include <QVector>
 
 class QAction;
-class QCheckBox;
 class QComboBox;
+class QHBoxLayout;
 class QLabel;
 class QMenu;
 class QPushButton;
+class QSlider;
 class QSplitter;
 class QSystemTrayIcon;
+class QTabWidget;
 class QToolButton;
 
 namespace app {
@@ -25,11 +27,13 @@ class CameraController;
 
 namespace ui {
 
-class EffectsPanel;
+class BackgroundPanel;
 class HardwareControlsPanel;
 class PreviewWidget;
-class PresetsPanel;
+class SegmentedControl;
 class SliderRow;
+class ToggleRow;
+class ToggleSwitch;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -49,13 +53,14 @@ protected:
     void hideEvent(QHideEvent *e) override;
 
 private:
-    QWidget *buildTopBar();
-    QWidget *buildPreviewArea();
-    QWidget *buildSidePanel();
-    QWidget *buildColorSection();
-    QWidget *buildFramingSection();
-    QWidget *buildOutputSection();
-    void buildMenus();
+    QWidget *buildHeader();
+    QWidget *buildPreviewColumn();
+    QWidget *buildSidebar();
+    QWidget *buildPictureTab();
+    QWidget *buildFramingTab();
+    QWidget *buildCameraTab();
+    QWidget *buildOutputTab();
+    QMenu *buildMainMenu();
     void buildTray();
     void buildShortcuts();
 
@@ -65,16 +70,17 @@ private:
     void syncFraming();
     void syncOutput();
     void syncCameraState();
-    void updateStats();
+    void syncPresets();
+    void updateStatus();
     void updatePreviewWanted();
     void updateBanner();
-    void rebuildTrayPresets();
-    void rebuildPresetMenu();
 
     void pushColor();
     void pushFraming(int transitionMs = -1);
     void pushOutput();
     void panBy(double dxOut, double dyOut);
+    void savePreset();
+    void managePresets();
     void runVirtualCameraSetup();
     void showAutomationHelp();
     void showAbout();
@@ -84,40 +90,50 @@ private:
     bool m_quitting = false;
     bool m_syncing = false;
     bool m_previewPaused = false;
+    bool m_showPerformance = false;
 
-    // Top bar
+    // Header
     QComboBox *m_cameraCombo = nullptr;
-    QComboBox *m_modeCombo = nullptr;
-    QToolButton *m_vcamButton = nullptr;
     QVector<cam::CameraSelection> m_cameraEntries;
-    QVector<cam::CaptureRequest> m_modeEntries;
+    ToggleSwitch *m_vcamSwitch = nullptr;
+    QLabel *m_vcamState = nullptr;
+    QToolButton *m_presetsButton = nullptr;
+    QMenu *m_presetsMenu = nullptr;
 
-    // Preview
+    // Preview column
     PreviewWidget *m_preview = nullptr;
     QLabel *m_banner = nullptr;
-    QLabel *m_stats = nullptr;
-    QSplitter *m_splitter = nullptr;
+    QSlider *m_zoomSlider = nullptr;
+    QLabel *m_zoomLabel = nullptr;
+    QPushButton *m_mirrorButton = nullptr;
+    QHBoxLayout *m_chipLayout = nullptr;
+    QLabel *m_statusDot = nullptr;
+    QLabel *m_statusText = nullptr;
+    QLabel *m_perfText = nullptr;
 
-    // Panels
+    // Sidebar
+    QTabWidget *m_tabs = nullptr;
+    QSplitter *m_splitter = nullptr;
     HardwareControlsPanel *m_hwPanel = nullptr;
-    EffectsPanel *m_effects = nullptr;
-    PresetsPanel *m_presets = nullptr;
+    BackgroundPanel *m_background = nullptr;
+    QComboBox *m_modeCombo = nullptr;
+    QVector<cam::CaptureRequest> m_modeEntries;
 
     SliderRow *m_brightness, *m_contrast, *m_saturation, *m_gamma, *m_sharpness, *m_warmth, *m_tint;
-    SliderRow *m_zoom, *m_panX, *m_panY, *m_fineRotation;
+    SliderRow *m_zoom, *m_panX, *m_panY, *m_straighten;
     SliderRow *m_cropL, *m_cropT, *m_cropR, *m_cropB;
-    QComboBox *m_rotation = nullptr;
-    QComboBox *m_aspect = nullptr;
-    QCheckBox *m_mirror = nullptr;
-    QCheckBox *m_flip = nullptr;
+    SegmentedControl *m_rotation = nullptr;
+    SegmentedControl *m_aspect = nullptr;
+    ToggleRow *m_mirror = nullptr;
+    ToggleRow *m_flip = nullptr;
 
-    QCheckBox *m_outEnabled = nullptr;
-    QComboBox *m_outDevice = nullptr;
-    QComboBox *m_outResolution = nullptr;
-    QComboBox *m_outFps = nullptr;
-    QComboBox *m_outFormat = nullptr;
+    ToggleRow *m_outEnabled = nullptr;
     QLabel *m_outStatus = nullptr;
     QPushButton *m_setupButton = nullptr;
+    QComboBox *m_outResolution = nullptr;
+    QComboBox *m_outFps = nullptr;
+    QComboBox *m_outDevice = nullptr;
+    QComboBox *m_outFormat = nullptr;
 
     // Tray & menus
     QSystemTrayIcon *m_tray = nullptr;
@@ -126,8 +142,6 @@ private:
     QAction *m_trayVcam = nullptr;
     QAction *m_trayShow = nullptr;
     QAction *m_pauseAction = nullptr;
-    QAction *m_statsAction = nullptr;
-    QMenu *m_presetMenu = nullptr;
 
     QTimer m_statsTimer;
     QString m_controlErrorText;

@@ -13,7 +13,7 @@ namespace app {
 // desktop asks the user to confirm or change the key bindings.
 //
 // Where the portal is unavailable, the same actions can be bound to commands
-// such as `camadjust --preset 2` in the desktop's keyboard settings.
+// such as `camtune --preset 2` in the desktop's keyboard settings.
 class GlobalShortcuts : public QObject {
     Q_OBJECT
 public:

@@ -3,7 +3,7 @@
  "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
 <policyconfig>
-  <action id="io.github.LinuxCameraAdjust.setup-v4l2loopback">
+  <action id="io.github.CamTune.setup-v4l2loopback">
     <description>Set up the virtual camera kernel module</description>
     <message>Authentication is required to load the v4l2loopback virtual camera module</message>
     <defaults>
@@ -11,6 +11,6 @@
       <allow_inactive>no</allow_inactive>
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">@CMAKE_INSTALL_FULL_LIBEXECDIR@/camadjust-setup-v4l2loopback</annotate>
+    <annotate key="org.freedesktop.policykit.exec.path">@CMAKE_INSTALL_FULL_LIBEXECDIR@/camtune-setup-v4l2loopback</annotate>
   </action>
 </policyconfig>

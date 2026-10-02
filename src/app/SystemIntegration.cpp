@@ -32,7 +32,7 @@ namespace autostart {
 static QString desktopFilePath()
 {
     return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) +
-           QStringLiteral("/autostart/io.github.LinuxCameraAdjust.desktop");
+           QStringLiteral("/autostart/io.github.CamTune.desktop");
 }
 
 bool isEnabled()
@@ -69,10 +69,10 @@ bool setEnabled(bool enabled, QString *error)
     }
     f.write(QStringLiteral("[Desktop Entry]\n"
                            "Type=Application\n"
-                           "Name=Camera Adjust\n"
+                           "Name=CamTune\n"
                            "Comment=Webcam controls and virtual camera\n"
                            "Exec=\"%1\" --minimized\n"
-                           "Icon=io.github.LinuxCameraAdjust\n"
+                           "Icon=io.github.CamTune\n"
                            "Terminal=false\n"
                            "X-GNOME-Autostart-enabled=true\n"
                            "X-GNOME-Autostart-Delay=2\n")
@@ -88,13 +88,30 @@ bool setEnabled(bool enabled, QString *error)
 
 } // namespace autostart
 
+void migrateLegacyConfig()
+{
+    const QString base = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
+    const QString oldDir = base + QStringLiteral("/LinuxCameraAdjust");
+    const QString newDir = base + QStringLiteral("/CamTune");
+    if (QFileInfo::exists(oldDir) && !QFileInfo::exists(newDir)) {
+        QDir().mkpath(newDir);
+        QFile::copy(oldDir + QStringLiteral("/camadjust.conf"), newDir + QStringLiteral("/camtune.conf"));
+        QFile::copy(oldDir + QStringLiteral("/presets.json"), newDir + QStringLiteral("/presets.json"));
+    }
+    const QString oldAutostart = base + QStringLiteral("/autostart/io.github.LinuxCameraAdjust.desktop");
+    if (QFileInfo::exists(oldAutostart)) {
+        QFile::remove(oldAutostart);
+        autostart::setEnabled(true);
+    }
+}
+
 QString setupHelperPath()
 {
-    const QString name = QStringLiteral("camadjust-setup-v4l2loopback");
+    const QString name = QStringLiteral("camtune-setup-v4l2loopback");
     const QStringList candidates = {
-        QStringLiteral(CAMADJUST_LIBEXECDIR "/") + name,
+        QStringLiteral(CAMTUNE_LIBEXECDIR "/") + name,
         QStringLiteral("/usr/libexec/") + name,
-        QStringLiteral("/usr/lib/camadjust/") + name,
+        QStringLiteral("/usr/lib/camtune/") + name,
         // Running from a build directory inside the source tree.
         QCoreApplication::applicationDirPath() + QStringLiteral("/../scripts/") + name,
         QCoreApplication::applicationDirPath() + QStringLiteral("/scripts/") + name,

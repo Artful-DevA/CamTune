@@ -1,17 +1,29 @@
-# Camera Adjust (LinuxCameraAdjust)
+# CamTune
 
 A lightweight, native Linux webcam control panel and virtual camera for video
 calls — a focused replacement for GUVCView/Webcamoid on Ubuntu and Fedora.
 
 ```
 Launch → webcam appears → adjust framing and color → enable virtual camera
-       → pick “Camera Adjust” in Zoom/Teams/Meet/Discord → leave it running for hours
+       → pick “CamTune” in Zoom/Teams/Meet/Discord → leave it running for hours
 ```
 
-Camera Adjust opens the physical webcam, applies hardware controls, color
+CamTune opens the physical webcam, applies hardware controls, color
 adjustments and framing (smooth zoom/pan, crop, rotation, mirror), and writes
 the result to a **v4l2loopback** virtual camera that every Linux application can
 select. It is not a recorder or streaming tool and does not try to replace OBS.
+
+## The window
+
+- **Header:** camera picker, **Presets** menu, the **Virtual camera** switch and a ☰ menu.
+- **Preview:** scroll to zoom, drag to move, double-click to reset. Underneath: zoom,
+  mirror, reset and one-click preset chips, plus a plain-language status line.
+- **Side panel tabs:** *Picture* (light, color, detail) · *Framing* (zoom & position,
+  rotation, straighten, mirror, crop) · *Background* (blur or replace behind you,
+  green screen…) · *Camera* (settings stored in the webcam) · *Output* (virtual
+  camera, resolution, frame rate, app preferences).
+- The mouse wheel never changes a slider you haven't clicked; over the side panel it
+  just scrolls.
 
 ## Features
 
@@ -30,7 +42,7 @@ select. It is not a recorder or streaming tool and does not try to replace OBS.
   double-click to reset.
 - **Virtual camera** – 640×360 up to 2560×1440, 15–60 fps (720p30, 1080p30 and
   1080p60 included), I420 (zero-conversion) or YUYV output.
-- **Presets** – save (File → Presets → Save, Ctrl+S) / load / rename / delete / reorder; each preset can include framing,
+- **Presets** – one-click chips under the preview, the **Presets** button (save with Ctrl+S, apply, manage: rename / delete / reorder / shortcut); each preset can include framing,
   color, hardware controls, output resolution/frame rate and effects. Ctrl+1…9
   in the window, smooth animated transitions between framings. Defaults:
   Ctrl+1 Normal, Ctrl+2 Zoom 1.25×, Ctrl+3 Close-up, Ctrl+4 Desk.
@@ -148,23 +160,23 @@ ctest --test-dir build --output-on-failure
 sudo cmake --install build
 ```
 
-`-DCAMADJUST_NATIVE=ON` adds `-march=native` for a few percent more speed on
+`-DCAMTUNE_NATIVE=ON` adds `-march=native` for a few percent more speed on
 the build machine.
 
 ## Virtual camera setup
 
 The virtual camera is provided by the `v4l2loopback` kernel module. Use
-**Output → Set up virtual camera…** (asks for your password via polkit) or run
+**Output tab → Set up virtual camera…** (asks for your password via polkit) or run
 the helper yourself:
 
 ```sh
-sudo scripts/camadjust-setup-v4l2loopback            # or --install to install the package first
+sudo scripts/camtune-setup-v4l2loopback            # or --install to install the package first
 ```
 
 It loads the module now and at every boot with:
 
 ```
-devices=1 video_nr=42 card_label="Camera Adjust" exclusive_caps=1 max_buffers=2
+devices=1 video_nr=42 card_label="CamTune" exclusive_caps=1 max_buffers=2
 ```
 
 - `exclusive_caps=1` is required for Chromium/WebRTC based apps (Google Meet,
@@ -176,19 +188,19 @@ via `mokutil`; the package installers usually walk you through it.
 
 ## Using it in a call
 
-1. Start Camera Adjust; your webcam appears in the preview.
+1. Start CamTune; your webcam appears in the preview.
 2. Adjust framing and color, then switch **Virtual camera** on.
-3. In Zoom/Teams/Meet/Discord/OBS/the browser choose **Camera Adjust** as the camera.
+3. In Zoom/Teams/Meet/Discord/OBS/the browser choose **CamTune** as the camera.
 
 Notes:
 
-- Leave Camera Adjust running (closing the window keeps it in the tray). With
-  *Settings → Start automatically on login* the virtual camera is always there.
+- Leave CamTune running (closing the window keeps it in the tray). With
+  *Output tab → Start when I log in* the virtual camera is always there.
 - With `exclusive_caps=1` the virtual camera is only advertised while Camera
   Adjust is sending to it. If a call app was started first, re-open its camera
   menu (or restart its video) after enabling the virtual camera.
 - Call apps may still list the physical camera too; pick the virtual one. If a
-  call app has grabbed the physical camera, Camera Adjust shows “in use by
+  call app has grabbed the physical camera, CamTune shows “in use by
   another application” and takes it over automatically once it is released.
 - Most call apps mirror only your *self-view*; others see the picture as sent.
   Use **Mirror** only if you want everyone to see a flipped image.
@@ -200,40 +212,40 @@ Notes:
 ## Command line and automation
 
 ```sh
-camadjust                      # start, or show the running instance
-camadjust --minimized          # start in the tray
-camadjust --preset 2           # by shortcut number, position or name
-camadjust --preset "Close-up"
-camadjust --zoom 1.5 | --zoom-in | --zoom-out | --reset-framing
-camadjust --pan 0.2,-0.3       # each -1 … 1
-camadjust --virtual-camera on|off|toggle
-camadjust --list-presets | --status | --show | --quit
+camtune                      # start, or show the running instance
+camtune --minimized          # start in the tray
+camtune --preset 2           # by shortcut number, position or name
+camtune --preset "Close-up"
+camtune --zoom 1.5 | --zoom-in | --zoom-out | --reset-framing
+camtune --pan 0.2,-0.3       # each -1 … 1
+camtune --virtual-camera on|off|toggle
+camtune --list-presets | --status | --show | --quit
 ```
 
 Commands are sent over D-Bus to the running instance (service
-`io.github.LinuxCameraAdjust`, object `/io/github/LinuxCameraAdjust`,
-interface `io.github.LinuxCameraAdjust1`: `ApplyPreset`, `ListPresets`,
+`io.github.CamTune`, object `/io/github/CamTune`,
+interface `io.github.CamTune1`: `ApplyPreset`, `ListPresets`,
 `SetZoom`, `AdjustZoom`, `SetPan`, `ResetFraming`, `SetVirtualCamera`,
 `ToggleVirtualCamera`, `ShowWindow`, `Status`, `Quit`). If no instance is
 running, the app is started and the command applied.
 
-**Global hotkeys while Zoom has focus:** enable *Settings → Global shortcuts*
+**Global hotkeys while Zoom has focus:** enable *Output tab → Shortcuts from any app*
 to register Ctrl+Alt+1…9 (presets), Ctrl+Alt+Up/Down (zoom), Ctrl+Alt+0 (reset)
 and Ctrl+Alt+V (virtual camera) through the XDG desktop portal (KDE Plasma,
 GNOME 48+, Hyprland…; your desktop lets you change the keys). On any desktop,
 Wayland or X11, you can instead bind keys to the commands above in the
 keyboard settings. Stream Deck/MIDI tools can call the same commands.
 
-Settings live in `~/.config/LinuxCameraAdjust/` (`camadjust.conf`,
+Settings live in `~/.config/CamTune/` (`camtune.conf`,
 `presets.json`; presets are written atomically).
 
 ## Troubleshooting
 
 | Symptom | Fix |
 | --- | --- |
-| “No virtual camera device found” | Load v4l2loopback (Output → Set up virtual camera…). |
-| Browser/Discord doesn't list “Camera Adjust” | v4l2loopback must be loaded with `exclusive_caps=1`; virtual camera must be ON. |
-| “Camera is in use by another application” | Another app opened the physical camera; switch it to the virtual camera. Camera Adjust retries automatically. |
+| “No virtual camera device found” | Load v4l2loopback (Output tab → Set up virtual camera…). |
+| Browser/Discord doesn't list “CamTune” | v4l2loopback must be loaded with `exclusive_caps=1`; virtual camera must be ON. |
+| “Camera is in use by another application” | Another app opened the physical camera; switch it to the virtual camera. CamTune retries automatically. |
 | “Cannot open … permission denied” | Add yourself to the `video` group (`sudo usermod -aG video $USER`, then log in again). |
 | Low frame rate in dim light | Disable *Allow frame rate drop* (exposure auto priority) or use manual exposure. |
 | High CPU | Lower output resolution; use *Automatic* format; turn off effects/sharpening; pause the preview (Ctrl+P). |

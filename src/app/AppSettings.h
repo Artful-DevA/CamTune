@@ -11,7 +11,7 @@
 
 namespace app {
 
-// Persistent application state (~/.config/LinuxCameraAdjust/camadjust.conf).
+// Persistent application state (~/.config/CamTune/camtune.conf).
 class AppSettings {
 public:
     AppSettings();
@@ -43,6 +43,10 @@ public:
     void setLastPreset(const QString &name);
     bool previewPaused() const;
     void setPreviewPaused(bool v);
+    bool showPerformance() const;
+    void setShowPerformance(bool v);
+    int lastTab() const;
+    void setLastTab(int i);
     bool firstRun() const;
     // Whether the user (or first-run auto-selection) has chosen a camera before.
     bool hasCameraChoice() const;

@@ -48,6 +48,8 @@ public:
 
 Q_SIGNALS:
     void presetApplied(const QString &name);
+    // The highlighted ("current") preset changed, e.g. cleared by a manual edit.
+    void currentPresetChanged();
 
 private:
     void onGlobalShortcut(const QString &id);
@@ -59,6 +61,7 @@ private:
     GlobalShortcuts *m_shortcuts = nullptr;
     SleepMonitor *m_sleep = nullptr;
     QString m_currentPreset;
+    bool m_applyingPreset = false;
 };
 
 } // namespace app

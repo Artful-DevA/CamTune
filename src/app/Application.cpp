@@ -16,7 +16,15 @@ Application::Application(QObject *parent) : QObject(parent)
 {
     m_presets.load();
     m_controller = new CameraController(m_settings, this);
+    // Only highlight the remembered preset if the picture still matches it.
     m_currentPreset = m_settings.lastPreset();
+    if (int i = m_presets.indexOf(m_currentPreset); i < 0) {
+        m_currentPreset.clear();
+    } else {
+        const Preset &p = m_presets.presets().at(i);
+        if ((p.hasFraming && p.framing != m_controller->framing()) || (p.hasColor && p.color != m_controller->color()))
+            m_currentPreset.clear();
+    }
 
     // The camera is released before suspend and reopened after resume; USB
     // cameras re-enumerate on resume, so give them a moment.
@@ -25,6 +33,18 @@ Application::Application(QObject *parent) : QObject(parent)
     connect(m_sleep, &SleepMonitor::resumed, this, [this] {
         QTimer::singleShot(1500, this, [this] { m_controller->setSuspended(false); });
     });
+
+    // A manual change means the picture no longer matches the last preset.
+    auto clearPreset = [this] {
+        if (m_applyingPreset || m_currentPreset.isEmpty())
+            return;
+        m_currentPreset.clear();
+        m_settings.setLastPreset(QString());
+        Q_EMIT currentPresetChanged();
+    };
+    connect(m_controller, &CameraController::framingChanged, this, clearPreset);
+    connect(m_controller, &CameraController::colorChanged, this, clearPreset);
+    connect(m_controller, &CameraController::effectsChanged, this, clearPreset);
 
     m_shortcuts = new GlobalShortcuts(this);
     connect(m_shortcuts, &GlobalShortcuts::activated, this, &Application::onGlobalShortcut);
@@ -73,11 +93,14 @@ void Application::applyPresetIndex(int index)
 {
     if (index < 0 || index >= m_presets.presets().size())
         return;
-    const Preset &p = m_presets.presets().at(index);
+    const Preset p = m_presets.presets().at(index);
+    m_applyingPreset = true;
     m_controller->applyPreset(p, m_settings.presetTransitionMs());
+    m_applyingPreset = false;
     m_currentPreset = p.name;
     m_settings.setLastPreset(p.name);
     Q_EMIT presetApplied(p.name);
+    Q_EMIT currentPresetChanged();
 }
 
 void Application::setZoom(double zoom)

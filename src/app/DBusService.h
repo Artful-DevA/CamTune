@@ -9,15 +9,15 @@ namespace app {
 
 class Application;
 
-inline constexpr const char *kDBusService = "io.github.LinuxCameraAdjust";
-inline constexpr const char *kDBusPath = "/io/github/LinuxCameraAdjust";
-inline constexpr const char *kDBusInterface = "io.github.LinuxCameraAdjust1";
+inline constexpr const char *kDBusService = "io.github.CamTune";
+inline constexpr const char *kDBusPath = "/io/github/CamTune";
+inline constexpr const char *kDBusInterface = "io.github.CamTune1";
 
 // Session-bus automation interface. Also used by the command line to talk
-// to an already running instance, e.g. `camadjust --preset 2`.
+// to an already running instance, e.g. `camtune --preset 2`.
 class DBusAdaptor : public QDBusAbstractAdaptor {
     Q_OBJECT
-    Q_CLASSINFO("D-Bus Interface", "io.github.LinuxCameraAdjust1")
+    Q_CLASSINFO("D-Bus Interface", "io.github.CamTune1")
 public:
     explicit DBusAdaptor(Application *app);
 

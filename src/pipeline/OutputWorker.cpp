@@ -21,7 +21,7 @@ std::string autoDevicePath()
         return {};
     // Prefer a device labelled for us by the setup script.
     for (auto &d : devs)
-        if (d.card.find("Camera Adjust") != std::string::npos)
+        if (d.card.find("CamTune") != std::string::npos || d.card.find("Camera Adjust") != std::string::npos)
             return d.path;
     return devs.front().path;
 }

@@ -2,6 +2,8 @@
 #include "app/Application.h"
 #include "app/DBusService.h"
 #include "app/PresetStore.h"
+#include "app/SystemIntegration.h"
+#include "ui/Theme.h"
 
 #include <QApplication>
 #include <QCommandLineParser>
@@ -61,7 +63,7 @@ int runRemote(const Commands &c)
     QDBusInterface iface(QString::fromLatin1(app::kDBusService), QString::fromLatin1(app::kDBusPath),
                          QString::fromLatin1(app::kDBusInterface));
     if (!iface.isValid()) {
-        err(QStringLiteral("camadjust is running but its D-Bus interface is not reachable."));
+        err(QStringLiteral("camtune is running but its D-Bus interface is not reachable."));
         return 1;
     }
     int rc = 0;
@@ -147,9 +149,9 @@ bool instanceRunning()
 
 int main(int argc, char **argv)
 {
-    QCoreApplication::setOrganizationName(QStringLiteral("LinuxCameraAdjust"));
-    QCoreApplication::setApplicationName(QStringLiteral("camadjust"));
-    QCoreApplication::setApplicationVersion(QStringLiteral(CAMADJUST_VERSION));
+    QCoreApplication::setOrganizationName(QStringLiteral("CamTune"));
+    QCoreApplication::setApplicationName(QStringLiteral("camtune"));
+    QCoreApplication::setApplicationVersion(QStringLiteral(CAMTUNE_VERSION));
 
     QStringList args;
     for (int i = 0; i < argc; ++i)
@@ -217,7 +219,7 @@ int main(int argc, char **argv)
         if (instanceRunning())
             return runRemote(cmd);
         if (cmd.status || cmd.quit) {
-            err(QStringLiteral("camadjust is not running."));
+            err(QStringLiteral("camtune is not running."));
             return 1;
         }
         if (cmd.listPresets) {
@@ -236,7 +238,7 @@ int main(int argc, char **argv)
         argvNew.insert(argvNew.begin() + 1, flag);
         argvNew.push_back(nullptr);
         execv("/proc/self/exe", argvNew.data());
-        err(QStringLiteral("Could not start camadjust: %1").arg(QString::fromLocal8Bit(std::strerror(errno))));
+        err(QStringLiteral("Could not start camtune: %1").arg(QString::fromLocal8Bit(std::strerror(errno))));
         return 1;
     }
 
@@ -249,10 +251,12 @@ int main(int argc, char **argv)
         c.show = true;
         return runRemote(c);
     }
-    QApplication::setDesktopFileName(QStringLiteral("io.github.LinuxCameraAdjust"));
-    QApplication::setApplicationDisplayName(QStringLiteral("Camera Adjust"));
+    QApplication::setDesktopFileName(QStringLiteral("io.github.CamTune"));
+    QApplication::setApplicationDisplayName(QStringLiteral("CamTune"));
+    ui::theme::apply(qapp);
     QApplication::setQuitOnLastWindowClosed(false);
 
+    app::migrateLegacyConfig();
     app::Application application;
     if (!application.registerDBus()) {
         // Lost a start-up race with another instance: hand over to it.

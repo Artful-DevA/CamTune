@@ -34,7 +34,7 @@ QString cameraKey(const cam::CameraSelection &s)
     return QString::fromLatin1(QCryptographicHash::hash(id.toUtf8(), QCryptographicHash::Sha1).toHex().left(16));
 }
 
-AppSettings::AppSettings() : m_settings(QStringLiteral("LinuxCameraAdjust"), QStringLiteral("camadjust")) {}
+AppSettings::AppSettings() : m_settings(QStringLiteral("CamTune"), QStringLiteral("camtune")) {}
 
 AppSettings::State AppSettings::loadState()
 {
@@ -74,7 +74,7 @@ bool AppSettings::startMinimized() const { return m_settings.value(QStringLitera
 void AppSettings::setStartMinimized(bool v) { m_settings.setValue(QStringLiteral("prefs/startMinimized"), v); }
 bool AppSettings::closeToTray() const { return m_settings.value(QStringLiteral("prefs/closeToTray"), true).toBool(); }
 void AppSettings::setCloseToTray(bool v) { m_settings.setValue(QStringLiteral("prefs/closeToTray"), v); }
-bool AppSettings::globalShortcuts() const { return m_settings.value(QStringLiteral("prefs/globalShortcuts"), true).toBool(); }
+bool AppSettings::globalShortcuts() const { return m_settings.value(QStringLiteral("prefs/globalShortcuts"), false).toBool(); }
 void AppSettings::setGlobalShortcuts(bool v) { m_settings.setValue(QStringLiteral("prefs/globalShortcuts"), v); }
 int AppSettings::presetTransitionMs() const
 {
@@ -87,6 +87,10 @@ bool AppSettings::previewPaused() const { return m_settings.value(QStringLiteral
 void AppSettings::setPreviewPaused(bool v) { m_settings.setValue(QStringLiteral("prefs/previewPaused"), v); }
 bool AppSettings::hasCameraChoice() const { return m_settings.value(QStringLiteral("prefs/cameraChosen"), false).toBool(); }
 void AppSettings::setHasCameraChoice(bool v) { m_settings.setValue(QStringLiteral("prefs/cameraChosen"), v); }
+bool AppSettings::showPerformance() const { return m_settings.value(QStringLiteral("prefs/showPerformance"), false).toBool(); }
+void AppSettings::setShowPerformance(bool v) { m_settings.setValue(QStringLiteral("prefs/showPerformance"), v); }
+int AppSettings::lastTab() const { return m_settings.value(QStringLiteral("window/lastTab"), 0).toInt(); }
+void AppSettings::setLastTab(int i) { m_settings.setValue(QStringLiteral("window/lastTab"), i); }
 bool AppSettings::firstRun() const { return !m_settings.value(QStringLiteral("prefs/initialized"), false).toBool(); }
 
 QByteArray AppSettings::windowGeometry() const { return m_settings.value(QStringLiteral("window/geometry")).toByteArray(); }

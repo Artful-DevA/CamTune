@@ -1,12 +1,12 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Sets up the v4l2loopback virtual camera for Camera Adjust.
+# Sets up the v4l2loopback virtual camera for CamTune.
 # Run as root (the application uses pkexec):
 #
-#   camadjust-setup-v4l2loopback            load module + make persistent
-#   camadjust-setup-v4l2loopback --install  also install the module package
-#   camadjust-setup-v4l2loopback --remove   remove the persistent configuration
+#   camtune-setup-v4l2loopback            load module + make persistent
+#   camtune-setup-v4l2loopback --install  also install the module package
+#   camtune-setup-v4l2loopback --remove   remove the persistent configuration
 #
 # Module options:
 #   exclusive_caps=1  required by Chromium/WebRTC based apps (Meet, Teams web,
@@ -16,11 +16,11 @@
 
 set -eu
 
-LABEL="Camera Adjust"
+LABEL="CamTune"
 VIDEO_NR=42
 OPTIONS="devices=1 video_nr=${VIDEO_NR} card_label=\"${LABEL}\" exclusive_caps=1 max_buffers=2"
-MODPROBE_CONF=/etc/modprobe.d/camadjust-v4l2loopback.conf
-LOAD_CONF=/etc/modules-load.d/camadjust-v4l2loopback.conf
+MODPROBE_CONF=/etc/modprobe.d/camtune-v4l2loopback.conf
+LOAD_CONF=/etc/modules-load.d/camtune-v4l2loopback.conf
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'Error: %s\n' "$*" >&2; exit 1; }

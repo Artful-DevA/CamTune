@@ -30,6 +30,10 @@ bool isEnabled();
 bool setEnabled(bool enabled, QString *error = nullptr);
 } // namespace autostart
 
+// One-time move of settings, presets and autostart from the app's previous
+// name ("Camera Adjust", ~/.config/LinuxCameraAdjust).
+void migrateLegacyConfig();
+
 // Locates the privileged v4l2loopback setup helper.
 QString setupHelperPath();
 

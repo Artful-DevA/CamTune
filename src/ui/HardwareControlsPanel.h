@@ -8,9 +8,7 @@
 
 #include <vector>
 
-class QCheckBox;
 class QComboBox;
-class QGridLayout;
 class QLabel;
 class QPushButton;
 class QVBoxLayout;
@@ -19,6 +17,7 @@ namespace ui {
 
 class Section;
 class SliderRow;
+class ToggleRow;
 
 // Generated UI for whatever V4L2/UVC controls the camera exposes. Known
 // controls are grouped (exposure, focus, gain, white balance, image); the rest
@@ -40,13 +39,13 @@ private:
     struct Entry {
         cam::v4l2::ControlInfo info;
         SliderRow *slider = nullptr;
-        QCheckBox *check = nullptr;
+        ToggleRow *toggle = nullptr;
         QComboBox *combo = nullptr;
         QPushButton *button = nullptr;
         QLabel *label = nullptr;
     };
     void rebuild(const std::vector<cam::v4l2::ControlInfo> &controls);
-    void addControl(QGridLayout *grid, int &row, const cam::v4l2::ControlInfo &c);
+    void addControl(QVBoxLayout *layout, const cam::v4l2::ControlInfo &c);
     void updateEntry(Entry &e, const cam::v4l2::ControlInfo &c);
 
     QVBoxLayout *m_layout;

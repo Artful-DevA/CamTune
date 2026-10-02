@@ -44,15 +44,15 @@ int cameraOrder(uint32_t id)
 QString friendlyName(const ControlInfo &c)
 {
     switch (c.id) {
-    case V4L2_CID_EXPOSURE_AUTO: return QObject::tr("Exposure mode");
-    case V4L2_CID_EXPOSURE_ABSOLUTE: return QObject::tr("Exposure");
-    case V4L2_CID_EXPOSURE_AUTO_PRIORITY: return QObject::tr("Allow frame rate drop");
+    case V4L2_CID_EXPOSURE_AUTO: return QObject::tr("Exposure");
+    case V4L2_CID_EXPOSURE_ABSOLUTE: return QObject::tr("Exposure time");
+    case V4L2_CID_EXPOSURE_AUTO_PRIORITY: return QObject::tr("Lower frame rate in dim light");
     case V4L2_CID_FOCUS_AUTO: return QObject::tr("Autofocus");
     case V4L2_CID_FOCUS_ABSOLUTE: return QObject::tr("Focus");
     case V4L2_CID_AUTO_WHITE_BALANCE: return QObject::tr("Auto white balance");
-    case V4L2_CID_WHITE_BALANCE_TEMPERATURE: return QObject::tr("White balance");
+    case V4L2_CID_WHITE_BALANCE_TEMPERATURE: return QObject::tr("White balance (K)");
     case V4L2_CID_AUTOGAIN: return QObject::tr("Auto gain");
-    case V4L2_CID_POWER_LINE_FREQUENCY: return QObject::tr("Anti-flicker");
+    case V4L2_CID_POWER_LINE_FREQUENCY: return QObject::tr("Anti-flicker (mains)");
     case V4L2_CID_BACKLIGHT_COMPENSATION: return QObject::tr("Backlight compensation");
     case V4L2_CID_ZOOM_ABSOLUTE: return QObject::tr("Optical zoom");
     default: return QString::fromStdString(c.name);
@@ -65,7 +65,8 @@ HardwareControlsPanel::HardwareControlsPanel(QWidget *parent) : QWidget(parent)
 {
     m_layout = new QVBoxLayout(this);
     m_layout->setContentsMargins(0, 0, 0, 0);
-    m_empty = new QLabel(tr("No camera controls available."));
+    m_empty = new QLabel(tr("This camera has no adjustable settings, or none is connected."));
+    m_empty->setObjectName(QStringLiteral("Muted"));
     m_empty->setWordWrap(true);
     m_layout->addWidget(m_empty);
 }
@@ -101,6 +102,7 @@ void HardwareControlsPanel::rebuild(const std::vector<ControlInfo> &controls)
     m_content = new QWidget;
     auto *v = new QVBoxLayout(m_content);
     v->setContentsMargins(0, 0, 0, 0);
+    v->setSpacing(4);
 
     std::vector<ControlInfo> camera, image, advanced;
     for (const auto &c : controls) {
@@ -114,44 +116,44 @@ void HardwareControlsPanel::rebuild(const std::vector<ControlInfo> &controls)
     std::stable_sort(camera.begin(), camera.end(), byOrder);
     std::stable_sort(image.begin(), image.end(), byOrder);
 
-    auto addGroup = [&](const QString &title, const std::vector<ControlInfo> &list, bool collapsed) {
+    auto addGroup = [&](const QString &title, const std::vector<ControlInfo> &list, bool collapsible) {
         if (list.empty())
             return;
-        QWidget *host;
-        QGridLayout *grid;
-        if (title.isEmpty()) {
-            host = new QWidget;
-            grid = new QGridLayout(host);
-            grid->setContentsMargins(0, 0, 0, 0);
-        } else {
-            auto *sec = new Section(title);
-            auto *inner = new QWidget;
-            grid = new QGridLayout(inner);
-            grid->setContentsMargins(0, 0, 0, 0);
-            sec->contentLayout()->addWidget(inner);
-            sec->setExpanded(!collapsed);
-            host = sec;
-        }
-        grid->setColumnStretch(1, 1);
-        int row = 0;
+        auto *sec = new Section(title, collapsible);
         for (const auto &c : list)
-            addControl(grid, row, c);
-        v->addWidget(host);
+            addControl(sec->contentLayout(), c);
+        v->addWidget(sec);
     };
-    addGroup(QString(), camera, false);
-    addGroup(tr("Sensor image (hardware)"), image, false);
-    addGroup(tr("More camera controls"), advanced, true);
+    addGroup(tr("Exposure, focus & white balance"), camera, false);
+    addGroup(tr("Image (set in the camera)"), image, false);
+    addGroup(tr("More camera settings"), advanced, true);
 
-    auto *reset = new QPushButton(tr("Reset camera to defaults"));
+    auto *reset = new QPushButton(tr("Reset camera settings"));
     connect(reset, &QPushButton::clicked, this, &HardwareControlsPanel::resetRequested);
-    auto *h = new QHBoxLayout;
-    h->addStretch(1);
-    h->addWidget(reset);
-    v->addLayout(h);
+    v->addSpacing(6);
+    v->addWidget(reset);
     m_layout->addWidget(m_content);
 }
 
-void HardwareControlsPanel::addControl(QGridLayout *grid, int &row, const ControlInfo &c)
+namespace {
+
+// Driver menu entries are often cryptic ("Aperture Priority Mode").
+QString friendlyMenuItem(uint32_t id, const QString &name)
+{
+    if (id == V4L2_CID_EXPOSURE_AUTO) {
+        if (name.startsWith(QLatin1String("Manual")))
+            return QObject::tr("Manual");
+        if (name.startsWith(QLatin1String("Aperture")) || name.startsWith(QLatin1String("Auto")))
+            return QObject::tr("Automatic");
+        if (name.startsWith(QLatin1String("Shutter")))
+            return QObject::tr("Automatic (fixed shutter)");
+    }
+    return name;
+}
+
+} // namespace
+
+void HardwareControlsPanel::addControl(QVBoxLayout *layout, const ControlInfo &c)
 {
     Entry e;
     e.info = c;
@@ -159,12 +161,11 @@ void HardwareControlsPanel::addControl(QGridLayout *grid, int &row, const Contro
     const quint32 id = c.id;
     switch (c.type) {
     case ControlInfo::Type::Integer: {
-        // Integer controls use the slider row; very large ranges still work
-        // because the slider operates on the raw integer value.
+        // Very large ranges still work because the slider uses raw integers.
         const double lo = double(std::max<int64_t>(c.minimum, INT32_MIN / 2));
         const double hi = double(std::min<int64_t>(c.maximum, INT32_MAX / 2));
-        // Parented to the grid's widget so it is deleted on rebuild.
-        e.slider = new SliderRow(grid, row++, name, lo, hi, double(c.defaultValue), 0);
+        e.slider = new SliderRow(name, lo, hi, double(c.defaultValue), 0);
+        layout->addWidget(e.slider);
         connect(e.slider, &SliderRow::valueChanged, this, [this, id, step = std::max<int64_t>(1, c.step),
                                                           min = c.minimum](double v) {
             // Snap to the control's step so drivers don't reject the value.
@@ -175,25 +176,30 @@ void HardwareControlsPanel::addControl(QGridLayout *grid, int &row, const Contro
         break;
     }
     case ControlInfo::Type::Boolean:
-        e.check = new QCheckBox(name);
-        grid->addWidget(e.check, row++, 0, 1, 4);
-        connect(e.check, &QCheckBox::toggled, this, [this, id](bool on) { Q_EMIT controlChanged(id, on ? 1 : 0); });
+        e.toggle = new ToggleRow(name);
+        layout->addWidget(e.toggle);
+        connect(e.toggle, &ToggleRow::toggled, this, [this, id](bool on) { Q_EMIT controlChanged(id, on ? 1 : 0); });
         break;
     case ControlInfo::Type::Menu:
-    case ControlInfo::Type::IntegerMenu:
+    case ControlInfo::Type::IntegerMenu: {
+        auto *row = new QWidget;
+        auto *h = new QHBoxLayout(row);
+        h->setContentsMargins(0, 2, 0, 2);
         e.label = new QLabel(name);
         e.combo = new QComboBox;
         for (const auto &m : c.menu)
-            e.combo->addItem(QString::fromStdString(m.second), qint64(m.first));
-        grid->addWidget(e.label, row, 0);
-        grid->addWidget(e.combo, row++, 1, 1, 3);
+            e.combo->addItem(friendlyMenuItem(c.id, QString::fromStdString(m.second)), qint64(m.first));
+        h->addWidget(e.label, 1);
+        h->addWidget(e.combo);
+        layout->addWidget(row);
         connect(e.combo, qOverload<int>(&QComboBox::activated), this, [this, id, combo = e.combo](int idx) {
             Q_EMIT controlChanged(id, combo->itemData(idx).toLongLong());
         });
         break;
+    }
     case ControlInfo::Type::Button:
         e.button = new QPushButton(name);
-        grid->addWidget(e.button, row++, 0, 1, 4);
+        layout->addWidget(e.button);
         connect(e.button, &QPushButton::clicked, this, [this, id] { Q_EMIT controlChanged(id, 1); });
         break;
     }
@@ -205,17 +211,17 @@ void HardwareControlsPanel::updateEntry(Entry &e, const ControlInfo &c)
 {
     e.info = c;
     const bool enabled = !c.readOnly && !c.inactive;
-    const QString tip = c.inactive ? tr("Controlled automatically by the camera") : QString();
+    const QString tip = c.inactive ? tr("Set automatically by the camera — switch its automatic mode off to adjust")
+                                   : QString();
     if (e.slider) {
         e.slider->setValue(double(c.value));
         e.slider->setEnabled(enabled);
-        e.slider->setToolTip(tip);
+        e.slider->setHint(tip);
     }
-    if (e.check) {
-        QSignalBlocker b(e.check);
-        e.check->setChecked(c.value != 0);
-        e.check->setEnabled(enabled);
-        e.check->setToolTip(tip);
+    if (e.toggle) {
+        e.toggle->setChecked(c.value != 0);
+        e.toggle->setEnabled(enabled);
+        e.toggle->setToolTip(tip);
     }
     if (e.combo) {
         QSignalBlocker b(e.combo);

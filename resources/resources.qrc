@@ -1,6 +1,12 @@
 <!DOCTYPE RCC>
 <RCC version="1.0">
   <qresource prefix="/">
-    <file>icons/camadjust.svg</file>
+    <file>icons/camtune.png</file>
+    <file>icons/hicolor/camtune-32.png</file>
+    <file>icons/hicolor/camtune-64.png</file>
+    <file>icons/arrow-down.png</file>
+    <file>icons/arrow-down@2x.png</file>
+    <file>icons/arrow-down-hover.png</file>
+    <file>icons/arrow-down-hover@2x.png</file>
   </qresource>
 </RCC>

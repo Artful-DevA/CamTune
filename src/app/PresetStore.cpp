@@ -18,7 +18,7 @@ PresetStore::PresetStore(QObject *parent) : QObject(parent) {}
 QString PresetStore::filePath()
 {
     return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) +
-           QStringLiteral("/LinuxCameraAdjust/presets.json");
+           QStringLiteral("/CamTune/presets.json");
 }
 
 QList<Preset> PresetStore::defaults()

@@ -27,7 +27,7 @@ struct Preset {
     cam::EffectParams effects;
 };
 
-// Presets live in ~/.config/LinuxCameraAdjust/presets.json and are written
+// Presets live in ~/.config/CamTune/presets.json and are written
 // atomically, so a crash can never leave a half-written file behind.
 class PresetStore : public QObject {
     Q_OBJECT
