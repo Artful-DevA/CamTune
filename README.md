@@ -30,15 +30,20 @@ select. It is not a recorder or streaming tool and does not try to replace OBS.
   double-click to reset.
 - **Virtual camera** – 640×360 up to 2560×1440, 15–60 fps (720p30, 1080p30 and
   1080p60 included), I420 (zero-conversion) or YUYV output.
-- **Presets** – save/load/rename/delete/reorder; each preset can include framing,
+- **Presets** – save (File → Presets → Save, Ctrl+S) / load / rename / delete / reorder; each preset can include framing,
   color, hardware controls, output resolution/frame rate and effects. Ctrl+1…9
   in the window, smooth animated transitions between framings. Defaults:
   Ctrl+1 Normal, Ctrl+2 Zoom 1.25×, Ctrl+3 Close-up, Ctrl+4 Desk.
-- **Background effects without AI** – blur entire image, blur drawn regions,
-  keep a drawn foreground ellipse/rectangle, fixed mask image, chroma key
-  (with color picker). Replace with blur, a solid color or an image.
-  Depth-camera masking is not implemented yet (there is no common Linux depth
-  API); it would plug into the same mask compositing.
+- **Background blur that follows you** – a small person-detection model
+  (Google MediaPipe selfie segmentation, ~230 KB, Apache-2.0) is built into
+  the app and runs on the CPU with a tiny built-in inference engine: no
+  internet, no extra libraries. The mask is refined against the full-resolution
+  picture so hair and shoulders stay crisp, and the background is blurred
+  without your outline bleeding into it. Replace the background with blur, a
+  solid color or an image.
+- **Effects without AI** – blur the entire image, blur drawn regions, keep a
+  drawn ellipse/rectangle sharp, a fixed mask image, or chroma key (with color
+  picker). Depth-camera masking is not implemented.
 - **Desktop integration** – system tray, start minimized, start on login,
   remembers the last camera, settings and preset, global shortcuts through the
   XDG desktop portal, a command line and a D-Bus interface for automation
@@ -96,7 +101,10 @@ Design choices that keep latency low and stable over multi-hour calls:
 
 Typical per-frame cost on a 4-core laptop CPU using 2 worker threads
 (`build/camcore_bench`): MJPEG 1080p decode ≈ 2 ms, 1080p→720p zoom+color
-≈ 2 ms, YUYV 1080p zoom+color ≈ 5 ms, background blur adds ≈ 4–5 ms at 1080p.
+≈ 2 ms, YUYV 1080p zoom+color ≈ 5 ms, whole-image blur adds ≈ 3 ms at 1080p.
+Person-detection blur adds roughly 10–15 ms per 720p frame (the network runs
+at most ~20×/s; edges are refined on every frame), so prefer 720p output
+when using it on slower CPUs.
 
 Source layout:
 
@@ -107,6 +115,8 @@ Source layout:
 | `src/pipeline` | capture / processing / output / control worker threads and the `Engine` facade |
 | `src/app` | Qt model (`CameraController`), presets, settings, D-Bus, portal shortcuts, autostart, suspend handling |
 | `src/ui` | main window, GPU preview, panels |
+| `src/core/nn` | minimal CPU inference engine for the embedded segmentation model |
+| `tools` | model converter (`.tflite` → `.camnn`), only needed to regenerate the model |
 | `tests` | unit tests, soak test, benchmark |
 
 ## Building

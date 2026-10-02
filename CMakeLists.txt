@@ -21,7 +21,22 @@ pkg_check_modules(TURBOJPEG REQUIRED IMPORTED_TARGET libturbojpeg)
 # ---------------------------------------------------------------------------
 # Core: capture, processing and virtual-camera output. No Qt dependency.
 # ---------------------------------------------------------------------------
+# The person-detection model is compiled into the binary (no files to find
+# at runtime, nothing downloaded).
+set(CAMADJUST_MODEL ${CMAKE_CURRENT_SOURCE_DIR}/resources/models/selfie_segmentation_landscape.camnn)
+set(CAMADJUST_MODEL_CPP ${CMAKE_CURRENT_BINARY_DIR}/generated/SelfieModelData.cpp)
+add_custom_command(
+  OUTPUT ${CAMADJUST_MODEL_CPP}
+  COMMAND ${CMAKE_COMMAND} -DIN=${CAMADJUST_MODEL} -DOUT=${CAMADJUST_MODEL_CPP}
+          -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedModel.cmake
+  DEPENDS ${CAMADJUST_MODEL} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedModel.cmake
+  COMMENT "Embedding person segmentation model")
+
 add_library(camcore STATIC
+  ${CAMADJUST_MODEL_CPP}
+  src/core/Blur.cpp
+  src/core/PersonSegmenter.cpp
+  src/core/nn/Network.cpp
   src/core/Frame.cpp
   src/core/ThreadPool.cpp
   src/core/Framing.cpp
@@ -38,6 +53,11 @@ add_library(camcore STATIC
   src/pipeline/ProcessingWorker.cpp
   src/pipeline/Engine.cpp
 )
+# Pixel/tensor math never produces NaN or infinities by design; these flags
+# let the compiler vectorize clamps and blends in the hot loops.
+set_source_files_properties(
+  src/core/Blur.cpp src/core/Effects.cpp src/core/PersonSegmenter.cpp src/core/nn/Network.cpp
+  PROPERTIES COMPILE_OPTIONS "-fno-math-errno;-ffinite-math-only;-fno-signed-zeros;-fno-trapping-math")
 target_include_directories(camcore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(camcore PUBLIC Threads::Threads PRIVATE PkgConfig::TURBOJPEG)
 target_compile_options(camcore PRIVATE -Wall -Wextra -Wno-unused-parameter

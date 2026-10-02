@@ -54,6 +54,8 @@ private:
     QWidget *m_fgBox;
     QComboBox *m_fgShape;
     SliderRow *m_feather;
+    QWidget *m_featherBox;
+    QLabel *m_personNote;
     QWidget *m_maskBox;
     QLineEdit *m_maskImage;
     QWidget *m_keyBox;

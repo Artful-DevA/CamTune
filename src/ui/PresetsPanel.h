@@ -19,10 +19,12 @@ class PresetsPanel : public QWidget {
 public:
     explicit PresetsPanel(app::Application &app, QWidget *parent = nullptr);
 
+    // Opens the "Save preset" dialog for the current settings.
+    void saveNew();
+
 private:
     void reload();
     int selected() const;
-    void saveNew();
     void updateSelected();
     void renameSelected();
     void deleteSelected();

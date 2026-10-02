@@ -69,6 +69,7 @@ private:
     void updatePreviewWanted();
     void updateBanner();
     void rebuildTrayPresets();
+    void rebuildPresetMenu();
 
     void pushColor();
     void pushFraming(int transitionMs = -1);
@@ -126,6 +127,7 @@ private:
     QAction *m_trayShow = nullptr;
     QAction *m_pauseAction = nullptr;
     QAction *m_statsAction = nullptr;
+    QMenu *m_presetMenu = nullptr;
 
     QTimer m_statsTimer;
     QString m_controlErrorText;

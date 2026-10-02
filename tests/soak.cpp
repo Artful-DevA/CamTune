@@ -77,7 +77,9 @@ int main(int argc, char **argv)
         engine.setColor(c);
         if (u(rng) < 0.02) {
             EffectParams e;
-            e.mode = EffectMode(int(u(rng) * 4));
+            static const EffectMode modes[] = {EffectMode::Off, EffectMode::BlurAll, EffectMode::BlurRegions,
+                                               EffectMode::Foreground, EffectMode::Person};
+            e.mode = modes[int(u(rng) * 5) % 5];
             engine.setEffects(e);
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(8));

@@ -127,6 +127,8 @@ MainWindow::MainWindow(app::Application &app, QWidget *parent)
     connect(&m_ctl, &app::CameraController::framingChanged, this, &MainWindow::syncFraming);
     connect(&m_ctl, &app::CameraController::effectsChanged, m_effects, &EffectsPanel::syncFromModel);
     connect(&m_app.presets(), &app::PresetStore::changed, this, &MainWindow::rebuildTrayPresets);
+    connect(&m_app.presets(), &app::PresetStore::changed, this, &MainWindow::rebuildPresetMenu);
+    connect(&m_app, &app::Application::presetApplied, this, &MainWindow::rebuildPresetMenu);
 
     m_controlErrorTimer.setSingleShot(true);
     m_controlErrorTimer.setInterval(6000);
@@ -425,6 +427,9 @@ QWidget *MainWindow::buildOutputSection()
 void MainWindow::buildMenus()
 {
     QMenu *file = menuBar()->addMenu(tr("&File"));
+    m_presetMenu = file->addMenu(tr("&Presets"));
+    rebuildPresetMenu();
+    file->addSeparator();
     QAction *quit = file->addAction(tr("&Quit"));
     quit->setShortcut(QKeySequence::Quit);
     connect(quit, &QAction::triggered, this, [this] { m_app.quit(); });
@@ -848,6 +853,28 @@ void MainWindow::updatePreviewWanted()
         m_preview->setMessage(tr("Preview paused (Ctrl+P)"));
     else if (m_ctl.cameraState() == cam::CameraState::Streaming)
         m_preview->setMessage(QString());
+}
+
+void MainWindow::rebuildPresetMenu()
+{
+    if (!m_presetMenu)
+        return;
+    m_presetMenu->clear();
+    QAction *save = m_presetMenu->addAction(tr("&Save current settings as preset…"));
+    save->setShortcut(QKeySequence::Save);
+    connect(save, &QAction::triggered, this, [this] { m_presets->saveNew(); });
+    m_presetMenu->addSeparator();
+    const auto &list = m_app.presets().presets();
+    for (int i = 0; i < list.size(); ++i) {
+        QAction *a = m_presetMenu->addAction(list[i].name);
+        a->setCheckable(true);
+        a->setChecked(list[i].name == m_app.currentPresetName());
+        if (list[i].shortcut)
+            a->setShortcut(QKeySequence(Qt::CTRL | Qt::Key(Qt::Key_0 + list[i].shortcut)));
+        // The window-wide QShortcuts handle the keys; the menu only displays them.
+        a->setShortcutContext(Qt::WidgetShortcut);
+        connect(a, &QAction::triggered, this, [this, i] { m_app.applyPresetIndex(i); });
+    }
 }
 
 void MainWindow::rebuildTrayPresets()

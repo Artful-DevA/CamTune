@@ -143,7 +143,7 @@ QJsonObject toJson(const cam::EffectParams &e)
 cam::EffectParams effectsFromJson(const QJsonObject &o)
 {
     cam::EffectParams e;
-    e.mode = cam::EffectMode(int(num(o, "mode", 0, 0, 5)));
+    e.mode = cam::EffectMode(int(num(o, "mode", 0, 0, 6)));
     e.fill = cam::BackgroundFill(int(num(o, "fill", 0, 0, 2)));
     e.blurStrength = num(o, "blurStrength", e.blurStrength, 0, 1);
     e.fillColor = parseColor(o, "fillColor", e.fillColor);

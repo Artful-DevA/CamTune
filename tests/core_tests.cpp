@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Unit tests for the Qt-free core. Run with ctest or directly.
 
+#include "core/Blur.h"
 #include "core/Effects.h"
+#include "core/PersonSegmenter.h"
 #include "core/Frame.h"
 #include "core/Framing.h"
 #include "core/Mailbox.h"
@@ -482,6 +484,68 @@ TEST(malformed_inputs_do_not_crash)
     p.cropRight = 5;
     p.panX = 1e9;
     CHECK(proc.process(src, dst, p));
+}
+
+TEST(gaussian_blur_quality)
+{
+    const int w = 320, h = 200;
+    std::vector<uint8_t> src(size_t(w) * h, 120), dst(size_t(w) * h);
+    ThreadPool pool(2);
+    GaussianBlur blur;
+    // A flat image stays exactly flat at every strength (no blocks or ripples).
+    for (double sigma : {1.0, 4.0, 12.0, 40.0}) {
+        blur.blur(src.data(), w, dst.data(), w, w, h, sigma, &pool);
+        bool flat = true;
+        for (uint8_t v : dst)
+            flat &= std::abs(int(v) - 120) <= 1;
+        CHECK(flat);
+    }
+    // A step edge becomes a monotonic ramp: no overshoot, no streaks.
+    for (int y = 0; y < h; ++y)
+        for (int x = 0; x < w; ++x)
+            src[size_t(y) * w + x] = x < w / 2 ? 40 : 200;
+    blur.blur(src.data(), w, dst.data(), w, w, h, 10, &pool);
+    bool monotonic = true;
+    for (int y = 0; y < h; ++y)
+        for (int x = 1; x < w; ++x)
+            monotonic &= dst[size_t(y) * w + x] + 1 >= dst[size_t(y) * w + x - 1];
+    CHECK(monotonic);
+    CHECK(dst[size_t(h / 2) * w + w / 2] > 90 && dst[size_t(h / 2) * w + w / 2] < 150);
+    CHECK(dst[size_t(h / 2) * w + 5] <= 41 && dst[size_t(h / 2) * w + w - 5] >= 199);
+
+    // Masked blur: pixels with zero weight (the person) must not bleed into
+    // the blurred background next to them.
+    std::vector<uint8_t> weight(size_t(w) * h);
+    for (int y = 0; y < h; ++y)
+        for (int x = 0; x < w; ++x)
+            weight[size_t(y) * w + x] = x < w / 2 ? 0 : 255;
+    std::fill(dst.begin(), dst.end(), 0);
+    blur.blur(src.data(), w, dst.data(), w, w, h, 10, &pool, weight.data(), w);
+    CHECK(std::abs(int(dst[size_t(h / 2) * w + w / 2 + 2]) - 200) <= 3);
+}
+
+TEST(person_segmenter_runs)
+{
+    PersonSegmenter seg;
+    CHECK(seg.available());
+    Frame f;
+    f.allocI420(640, 360);
+    renderTestPattern(f, 1);
+    ThreadPool pool(2);
+    std::vector<uint8_t> mask;
+    CHECK(seg.compute(f, pool, 0.3, mask));
+    CHECK(mask.size() == size_t(640) * 360);
+    // Malformed input is rejected rather than crashing.
+    Frame tiny;
+    tiny.allocI420(8, 8);
+    CHECK(!seg.compute(tiny, pool, 0.3, mask));
+
+    EffectsRenderer fx;
+    EffectParams e;
+    e.mode = EffectMode::Person;
+    fx.setParams(e);
+    fx.apply(f, pool);
+    CHECK(fx.personDetectionAvailable());
 }
 
 int main()

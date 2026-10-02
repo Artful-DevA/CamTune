@@ -68,6 +68,7 @@ enum class EffectMode : int {
     Foreground = 3,     // keep a user-drawn ellipse/rectangle, replace the rest
     MaskImage = 4,      // keep where a fixed mask image is white, replace the rest
     ChromaKey = 5,      // green screen
+    Person = 6,         // local person detection (embedded MediaPipe model)
 };
 
 enum class BackgroundFill : int { Blur = 0, Color = 1, Image = 2 };
@@ -80,7 +81,7 @@ struct EffectParams {
     std::vector<RectF> blurRegions;
     RectF foreground{0.2, 0.05, 0.6, 0.95};
     bool foregroundEllipse = true;
-    double feather = 0.08;              // fraction of the shorter output side
+    double feather = 0.08;              // edge softness: fraction of the shorter side (shape), 0..0.3 (person)
     uint32_t keyColor = 0xff00b140;     // ARGB, typical chroma green
     double keySimilarity = 0.25;        // 0 .. 1
     double keySmoothness = 0.08;        // 0 .. 1

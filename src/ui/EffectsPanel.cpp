@@ -39,9 +39,10 @@ EffectsPanel::EffectsPanel(app::CameraController &controller, PreviewWidget *pre
     modeRow->addWidget(new QLabel(tr("Effect:")));
     m_mode = new QComboBox;
     m_mode->addItem(tr("Off"), int(cam::EffectMode::Off));
+    m_mode->addItem(tr("Blur background (detects you)"), int(cam::EffectMode::Person));
     m_mode->addItem(tr("Blur entire image"), int(cam::EffectMode::BlurAll));
     m_mode->addItem(tr("Blur selected regions"), int(cam::EffectMode::BlurRegions));
-    m_mode->addItem(tr("Keep foreground shape"), int(cam::EffectMode::Foreground));
+    m_mode->addItem(tr("Keep a drawn shape sharp"), int(cam::EffectMode::Foreground));
     m_mode->addItem(tr("Fixed mask image"), int(cam::EffectMode::MaskImage));
     m_mode->addItem(tr("Chroma key (green screen)"), int(cam::EffectMode::ChromaKey));
     modeRow->addWidget(m_mode, 1);
@@ -96,11 +97,17 @@ EffectsPanel::EffectsPanel(app::CameraController &controller, PreviewWidget *pre
         g->addWidget(m_fgShape, 0, 1);
         auto *draw = new QPushButton(tr("Draw on preview"));
         g->addWidget(draw, 0, 2, 1, 2);
-        m_feather = new SliderRow(g, 1, tr("Soft edge"), 0, 30, 8, 0, QStringLiteral(" %"));
         g->setColumnStretch(1, 1);
         m_fgBox = box(g);
         v->addWidget(m_fgBox);
         connect(m_fgShape, qOverload<int>(&QComboBox::activated), this, &EffectsPanel::push);
+
+        auto *fg = new QGridLayout;
+        m_feather = new SliderRow(fg, 0, tr("Soft edge"), 0, 30, 8, 0, QStringLiteral(" %"));
+        m_feather->setToolTip(tr("How gradually you blend into the background"));
+        fg->setColumnStretch(1, 1);
+        m_featherBox = box(fg);
+        v->addWidget(m_featherBox);
         connect(m_feather, &SliderRow::valueChanged, this, &EffectsPanel::push);
         connect(draw, &QPushButton::clicked, this, [this] {
             m_pending = Pending::Foreground;
@@ -193,6 +200,12 @@ EffectsPanel::EffectsPanel(app::CameraController &controller, PreviewWidget *pre
     m_hint->setStyleSheet(QStringLiteral("color: palette(highlight);"));
     m_hint->hide();
     v->addWidget(m_hint);
+
+    m_personNote = new QLabel(tr("Detection runs entirely on this computer using a small built-in model "
+                                 "(Google MediaPipe selfie segmentation)."));
+    m_personNote->setWordWrap(true);
+    m_personNote->setEnabled(false);
+    v->addWidget(m_personNote);
 
     auto *note = new QLabel(tr("Effects add some CPU load; keep them off when not needed."));
     note->setWordWrap(true);
@@ -306,9 +319,11 @@ void EffectsPanel::updateVisibility()
     const auto mode = cam::EffectMode(m_mode->currentData().toInt());
     const auto fill = cam::BackgroundFill(m_fill->currentData().toInt());
     const bool replaces = mode == cam::EffectMode::Foreground || mode == cam::EffectMode::MaskImage ||
-                          mode == cam::EffectMode::ChromaKey;
+                          mode == cam::EffectMode::ChromaKey || mode == cam::EffectMode::Person;
     m_regionsBox->setVisible(mode == cam::EffectMode::BlurRegions);
     m_fgBox->setVisible(mode == cam::EffectMode::Foreground);
+    m_featherBox->setVisible(mode == cam::EffectMode::Foreground || mode == cam::EffectMode::Person);
+    m_personNote->setVisible(mode == cam::EffectMode::Person);
     m_maskBox->setVisible(mode == cam::EffectMode::MaskImage);
     m_keyBox->setVisible(mode == cam::EffectMode::ChromaKey);
     m_fillBox->setVisible(mode != cam::EffectMode::Off);

@@ -99,6 +99,13 @@ int main(int argc, char **argv)
     e.mode = EffectMode::Foreground;
     proc.setEffects(e);
     row("YUYV 1080p -> 1080p + foreground mask", timeIt(30, [&] { proc.process(yuyv, out1080, zoomed); }));
+    e.mode = EffectMode::Person;
+    proc.setEffects(e);
+    row("YUYV 1080p -> 1080p + person blur", timeIt(30, [&] { proc.process(yuyv, out1080, zoomed); }));
+    row("MJPEG 1080p -> 720p + person blur", timeIt(30, [&] { proc.process(decoded, out720, zoomed); }));
+    e.mode = EffectMode::Off;
+    proc.setEffects(e);
+    row("MJPEG 1080p -> 720p (no effect, reference)", timeIt(30, [&] { proc.process(decoded, out720, zoomed); }));
     std::vector<uint8_t> packed(size_t(1920) * 1080 * 2);
     row("I420 -> YUYV pack 1080p", timeIt(60, [&] { packI420ToYuyv(out1080, packed.data(), 3840); }));
     tjFree(jpeg);
