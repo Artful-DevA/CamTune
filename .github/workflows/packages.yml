@@ -2,11 +2,16 @@ name: Packages
 
 # Builds installable packages for each supported distribution, installs each
 # one into a clean container to check it, and attaches them all to a GitHub
-# Release when a version tag (v0.1.0, …) is pushed. Run it by hand from the
-# Actions tab to get the packages as downloadable artifacts without a release.
+# Release when a version tag (v0.1.0, …) is pushed. Branch pushes that touch
+# the build or packaging run it too, leaving the packages as artifacts.
 on:
   push:
     tags: ['v*']
+    branches: ['**']
+    paths:
+      - 'CMakeLists.txt'
+      - 'packaging/**'
+      - '.github/workflows/packages.yml'
   workflow_dispatch:
 
 permissions:
