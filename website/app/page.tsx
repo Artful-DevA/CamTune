@@ -21,7 +21,8 @@ function releaseLabel(asset: Asset) {
   if (asset.type === 'deb') {
     if (n.includes('debian-12')) return 'Debian 12';
     if (n.includes('debian-13')) return 'Debian 13';
-    if (n.includes('ubuntu')) return 'Ubuntu';
+    const ubuntu = n.match(/ubuntu-(\d+\.\d+)/);
+    if (ubuntu) return `Ubuntu ${ubuntu[1]}`;
     return 'Debian / Ubuntu';
   }
   if (asset.type === 'rpm') {
