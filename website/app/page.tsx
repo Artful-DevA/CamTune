@@ -16,6 +16,31 @@ function formatSize(bytes: number) {
   return `${value.toFixed(i > 1 ? 1 : 0)} ${units[i]}`;
 }
 
+function releaseLabel(asset: Asset) {
+  const n = asset.name.toLowerCase();
+  if (asset.type === 'deb') {
+    if (n.includes('debian-12')) return 'Debian 12';
+    if (n.includes('debian-13')) return 'Debian 13';
+    if (n.includes('ubuntu')) return 'Ubuntu';
+    return 'Debian / Ubuntu';
+  }
+  if (asset.type === 'rpm') {
+    const fedora = n.match(/fedora-(\d+)/);
+    return fedora ? `Fedora ${fedora[1]}` : 'Fedora / RHEL';
+  }
+  if (asset.type === 'arch') return 'Arch Linux';
+  if (asset.type === 'appimage') return 'AppImage';
+  return asset.name;
+}
+
+function releaseTag(asset: Asset) {
+  if (asset.type === 'deb') return 'DEB';
+  if (asset.type === 'rpm') return 'RPM';
+  if (asset.type === 'arch') return 'ARCH';
+  if (asset.type === 'appimage') return 'APP';
+  return 'FILE';
+}
+
 const features = [
   ['01', 'Camera controls', 'Exposure, focus, gain, white balance, brightness, contrast, saturation, sharpness and other UVC controls exposed by your camera.'],
   ['02', 'Framing', 'Zoom up to 8×, pan, crop, rotation, mirror and flip. Scroll to zoom, drag to move, double-click to reset.'],
@@ -37,10 +62,8 @@ export default function Home() {
   }, []);
 
   const assets = useMemo(() => release?.assets ?? [], [release]);
-  const deb = assets.find(a => a.type === 'deb');
-  const rpm = assets.find(a => a.type === 'rpm');
-  const appImage = assets.find(a => a.type === 'appimage');
-  const anyReleaseDownload = deb || rpm || appImage;
+  const releaseDownloads = assets.filter(a => ['deb', 'rpm', 'appimage', 'arch'].includes(a.type));
+  const anyReleaseDownload = releaseDownloads.length > 0;
 
   return (
     <main>
@@ -159,14 +182,18 @@ export default function Home() {
           </div>
         ) : (
           <div className="package-list">
-            {deb && <a className="package-row" href="/download/deb"><span className="pkg-tag">DEB</span><span><strong>Ubuntu / Debian</strong><small>{deb.name} · {formatSize(deb.size)}</small></span><b>Download ↓</b></a>}
-            {rpm && <a className="package-row" href="/download/rpm"><span className="pkg-tag">RPM</span><span><strong>Fedora / RHEL</strong><small>{rpm.name} · {formatSize(rpm.size)}</small></span><b>Download ↓</b></a>}
-            {appImage && <a className="package-row" href="/download/appimage"><span className="pkg-tag">APP</span><span><strong>AppImage</strong><small>{appImage.name} · {formatSize(appImage.size)}</small></span><b>Download ↓</b></a>}
+            {releaseDownloads.map(asset => (
+              <a className="package-row" href={asset.url} key={asset.name}>
+                <span className="pkg-tag">{releaseTag(asset)}</span>
+                <span><strong>{releaseLabel(asset)}</strong><small>{asset.name} · {formatSize(asset.size)}</small></span>
+                <b>Download ↓</b>
+              </a>
+            ))}
           </div>
         )}
 
         <div className="download-foot">
-          <span>{os === 'linux' ? 'Linux detected.' : 'CamTune currently targets Linux.'}</span>
+          <span>{os === 'linux' ? 'Linux detected. Choose the matching release asset.' : 'CamTune currently targets Linux.'}</span>
           <a href={`${GITHUB}/releases`} target="_blank" rel="noreferrer">All releases ↗</a>
         </div>
       </section>
