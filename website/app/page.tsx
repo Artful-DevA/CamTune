@@ -52,6 +52,7 @@ export default function Home() {
           </a>
           <nav className="nav-links" aria-label="Primary navigation">
             <a href="#features">Features</a>
+            <a href="#security">Security</a>
             <a href="#download">Download</a>
             <a href={GITHUB} target="_blank" rel="noreferrer">GitHub ↗</a>
           </nav>
@@ -120,6 +121,26 @@ export default function Home() {
             <div><dt>0</dt><dd>RGB round trips in the main processing path</dd></div>
           </dl>
           <small>* Typical repository benchmark on a 4-core laptop CPU using 2 worker threads.</small>
+        </div>
+      </section>
+
+      <section className="security-section" id="security">
+        <div className="wrap security-grid">
+          <div>
+            <span className="section-kicker">Security & privacy</span>
+            <h2>Designed with a small attack surface.</h2>
+          </div>
+          <div className="security-copy">
+            <p>CamTune processes camera data locally. It does not require an account or cloud processing for its core camera pipeline, and the source code is public so users can inspect how it works.</p>
+            <p>Security is treated as a design requirement, not a guarantee. Dependencies are kept current, the website uses restrictive browser security headers, and the project avoids unnecessary network-facing components.</p>
+            <a href={GITHUB} target="_blank" rel="noreferrer">Inspect the source on GitHub ↗</a>
+          </div>
+        </div>
+        <div className="wrap security-points" aria-label="CamTune security principles">
+          <div><strong>Local processing</strong><span>Camera frames stay on your machine for CamTune's processing path.</span></div>
+          <div><strong>No account required</strong><span>No login is needed to use the application.</span></div>
+          <div><strong>Open source</strong><span>The implementation can be reviewed publicly.</span></div>
+          <div><strong>Minimal web surface</strong><span>No database, user accounts or upload backend on the website.</span></div>
         </div>
       </section>
 
