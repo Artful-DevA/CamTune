@@ -42,12 +42,12 @@ function releaseTag(asset: Asset) {
 }
 
 const features = [
-  ['01', 'Camera controls', 'Exposure, focus, gain, white balance, brightness, contrast, saturation, sharpness and other UVC controls exposed by your camera.'],
-  ['02', 'Framing', 'Zoom up to 8×, pan, crop, rotation, mirror and flip. Scroll to zoom, drag to move, double-click to reset.'],
-  ['03', 'Virtual camera', 'Use CamTune as a camera source in Zoom, Meet, Teams, Discord and OBS, up to 2560×1440 at 60 fps.'],
-  ['04', 'Presets', 'Save camera and framing setups and switch between them quickly instead of rebuilding your setup every call.'],
-  ['05', 'Backgrounds', 'Blur or replace the background locally. No cloud upload is required for the processing path.'],
-  ['06', 'Low latency', 'A latest-frame pipeline avoids building a queue of stale frames, keeping interaction responsive during long calls.'],
+  ['01', 'Camera controls', 'Adjust focus, exposure, white balance, brightness, contrast and the controls your webcam already supports.'],
+  ['02', 'Framing', 'Zoom, pan, crop, rotate, mirror and flip without digging through another app.'],
+  ['03', 'Virtual camera', 'Use CamTune in Zoom, Meet, Teams, Discord and OBS as a normal camera source.'],
+  ['04', 'Presets', 'Save setups for different calls, cameras or lighting and switch between them quickly.'],
+  ['05', 'Backgrounds', 'Blur or replace your background while keeping the processing on your computer.'],
+  ['06', 'Low latency', 'CamTune is built to stay responsive instead of letting delayed frames pile up during long calls.'],
 ];
 
 export default function Home() {
@@ -84,41 +84,40 @@ export default function Home() {
 
       <section className="hero wrap" id="top">
         <div className="hero-copy">
-          <div className="meta-line"><span>Linux</span><span>Qt</span><span>GPL-3.0</span></div>
+          <div className="meta-line"><span>Linux</span><span>Open source</span></div>
           <h1>Webcam controls<br/>for Linux.</h1>
-          <p className="lead">CamTune gives you proper control over framing, image settings, presets, backgrounds and a virtual camera without turning into a streaming suite.</p>
+          <p className="lead">CamTune puts framing, image controls, presets, backgrounds and a virtual camera in one focused Linux app.</p>
           <div className="hero-actions">
             <a className={`primary ${!anyReleaseDownload ? 'disabled' : ''}`} href="#download">
               {anyReleaseDownload ? 'Download CamTune' : 'Release publishing soon'}
             </a>
-            <a className="text-link" href={GITHUB} target="_blank" rel="noreferrer">Source on GitHub ↗</a>
+            <a className="text-link" href={GITHUB} target="_blank" rel="noreferrer">View on GitHub ↗</a>
           </div>
-          <p className="support">Ubuntu 22.04+ · Debian 12+ · Fedora 38+</p>
+          <p className="support">Debian · Fedora · Arch · AppImage</p>
         </div>
 
         <div className="hero-product" aria-label="CamTune product summary">
           <div className="hero-logo-wrap"><img src="/camtune-logo.svg" alt="CamTune logo" /></div>
           <div className="product-specs">
-            <div><span>Input</span><strong>V4L2 / UVC</strong></div>
-            <div><span>Output</span><strong>Virtual camera</strong></div>
-            <div><span>Max output</span><strong>2560×1440 · 60 fps</strong></div>
-            <div><span>Processing</span><strong>Local</strong></div>
+            <div><span>Works with</span><strong>Linux webcams</strong></div>
+            <div><span>Use it in</span><strong>Zoom, Meet, Teams, OBS</strong></div>
+            <div><span>Video processing</span><strong>On your computer</strong></div>
           </div>
         </div>
       </section>
 
       <section className="manifesto">
         <div className="wrap manifesto-inner">
-          <p>Not a recorder.</p>
-          <p>Not a streaming suite.</p>
-          <p>Just the webcam controls Linux should already have.</p>
+          <p>No account.</p>
+          <p>No cloud camera pipeline.</p>
+          <p>Just better webcam control on Linux.</p>
         </div>
       </section>
 
       <section className="section wrap" id="features">
         <div className="section-title-row">
-          <div><span className="section-kicker">Capabilities</span><h2>What CamTune actually does.</h2></div>
-          <p>Native controls first. Everything else stays out of the way.</p>
+          <div><span className="section-kicker">Features</span><h2>The controls you actually need.</h2></div>
+          <p>Enough control to fix your camera setup without turning CamTune into a streaming suite.</p>
         </div>
         <div className="feature-list">
           {features.map(([n, title, body]) => (
@@ -134,16 +133,15 @@ export default function Home() {
       <section className="tech-section">
         <div className="wrap tech-grid">
           <div>
-            <span className="section-kicker">Pipeline</span>
-            <h2>Built to stay responsive.</h2>
-            <p>CamTune keeps only the newest frame between processing stages instead of letting latency accumulate. Capture and device I/O stay off the UI thread.</p>
+            <span className="section-kicker">Performance</span>
+            <h2>Made to feel immediate.</h2>
+            <p>CamTune prioritizes the newest camera frame instead of letting old frames queue up. That helps controls feel responsive even during long calls.</p>
           </div>
           <dl className="tech-stats">
-            <div><dt>≈2 ms</dt><dd>1080p MJPEG decode*</dd></div>
-            <div><dt>≈2 ms</dt><dd>1080p → 720p zoom + color*</dd></div>
-            <div><dt>0</dt><dd>RGB round trips in the main processing path</dd></div>
+            <div><dt>Local</dt><dd>Video processing stays on your machine.</dd></div>
+            <div><dt>Native</dt><dd>Built as a Linux desktop application.</dd></div>
+            <div><dt>Fast</dt><dd>Designed around a low-latency camera pipeline.</dd></div>
           </dl>
-          <small>* Typical repository benchmark on a 4-core laptop CPU using 2 worker threads.</small>
         </div>
       </section>
 
@@ -151,25 +149,24 @@ export default function Home() {
         <div className="wrap security-grid">
           <div>
             <span className="section-kicker">Security & privacy</span>
-            <h2>Designed with a small attack surface.</h2>
+            <h2>Privacy first, with less to expose.</h2>
           </div>
           <div className="security-copy">
-            <p>CamTune processes camera data locally. It does not require an account or cloud processing for its core camera pipeline, and the source code is public so users can inspect how it works.</p>
-            <p>Security is treated as a design requirement, not a guarantee. Dependencies are kept current, the website uses restrictive browser security headers, and the project avoids unnecessary network-facing components.</p>
+            <p>Your camera processing happens locally. CamTune does not require an account or send its core camera pipeline to a cloud service.</p>
+            <p>Security is treated as a design requirement. The project is open source, keeps the website deliberately simple, and avoids unnecessary network-facing components.</p>
             <a href={GITHUB} target="_blank" rel="noreferrer">Inspect the source on GitHub ↗</a>
           </div>
         </div>
         <div className="wrap security-points" aria-label="CamTune security principles">
-          <div><strong>Local processing</strong><span>Camera frames stay on your machine for CamTune's processing path.</span></div>
-          <div><strong>No account required</strong><span>No login is needed to use the application.</span></div>
-          <div><strong>Open source</strong><span>The implementation can be reviewed publicly.</span></div>
-          <div><strong>Minimal web surface</strong><span>No database, user accounts or upload backend on the website.</span></div>
+          <div><strong>Local by default</strong><span>Camera processing stays on your machine.</span></div>
+          <div><strong>No account</strong><span>There is no login required to use CamTune.</span></div>
+          <div><strong>Open source</strong><span>The code is public and can be reviewed.</span></div>
         </div>
       </section>
 
       <section className="section wrap" id="download">
         <div className="section-title-row download-title-row">
-          <div><span className="section-kicker">Download</span><h2>Install CamTune.</h2></div>
+          <div><span className="section-kicker">Download</span><h2>Pick your Linux build.</h2></div>
           {release?.available && <div className="version">Latest release <strong>{release.tag}</strong></div>}
         </div>
 
@@ -185,7 +182,7 @@ export default function Home() {
             {releaseDownloads.map(asset => (
               <a className="package-row" href={asset.url} key={asset.name}>
                 <span className="pkg-tag">{releaseTag(asset)}</span>
-                <span><strong>{releaseLabel(asset)}</strong><small>{asset.name} · {formatSize(asset.size)}</small></span>
+                <span><strong>{releaseLabel(asset)}</strong><small>{formatSize(asset.size)}</small></span>
                 <b>Download ↓</b>
               </a>
             ))}
@@ -193,7 +190,7 @@ export default function Home() {
         )}
 
         <div className="download-foot">
-          <span>{os === 'linux' ? 'Linux detected. Choose the matching release asset.' : 'CamTune currently targets Linux.'}</span>
+          <span>{os === 'linux' ? 'Linux detected. Choose the build that matches your distro.' : 'CamTune currently targets Linux.'}</span>
           <a href={`${GITHUB}/releases`} target="_blank" rel="noreferrer">All releases ↗</a>
         </div>
       </section>
@@ -201,7 +198,7 @@ export default function Home() {
       <footer>
         <div className="wrap footer-inner">
           <div className="brand footer-brand"><img src="/camtune-logo.svg" alt="" /><span>CamTune</span></div>
-          <p>Native Linux webcam control.</p>
+          <p>Better webcam control for Linux.</p>
           <div className="footer-links"><a href={GITHUB} target="_blank" rel="noreferrer">GitHub</a><a href={`${GITHUB}/issues`} target="_blank" rel="noreferrer">Issues</a><a href={`${GITHUB}/blob/claude/admiring-meitner-re9fkq/LICENSE`} target="_blank" rel="noreferrer">License</a></div>
         </div>
       </footer>
