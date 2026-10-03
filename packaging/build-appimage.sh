@@ -15,17 +15,23 @@ apt-get install -y -q --no-install-recommends build-essential cmake pkg-config \
     ca-certificates wget file patchelf libfuse2 squashfs-tools
 
 ARCH=$(uname -m)
+# The tools are "continuous" GitHub releases that are replaced in place, so a
+# download can briefly fail while a new build is uploaded. Retry for a while.
+fetch() {
+    wget -q --tries=6 --waitretry=10 --retry-connrefused \
+        --retry-on-http-error=404,429,500,502,503,504 -O "$1" "$2"
+}
 TOOLS=/tmp/appimage-tools
 mkdir -p "$TOOLS"
 for tool in linuxdeploy linuxdeploy-plugin-qt; do
     if [ ! -x "$TOOLS/$tool-$ARCH.AppImage" ]; then
-        wget -q -O "$TOOLS/$tool-$ARCH.AppImage" \
+        fetch "$TOOLS/$tool-$ARCH.AppImage" \
             "https://github.com/linuxdeploy/$tool/releases/download/continuous/$tool-$ARCH.AppImage"
         chmod +x "$TOOLS/$tool-$ARCH.AppImage"
     fi
 done
 if [ ! -f "$TOOLS/runtime-$ARCH" ]; then
-    wget -q -O "$TOOLS/runtime-$ARCH" \
+    fetch "$TOOLS/runtime-$ARCH" \
         "https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-$ARCH"
 fi
 export LDAI_RUNTIME_FILE="$TOOLS/runtime-$ARCH"
