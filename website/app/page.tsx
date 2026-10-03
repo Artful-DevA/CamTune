@@ -40,7 +40,7 @@ export default function Home() {
   const deb = assets.find(a => a.type === 'deb');
   const rpm = assets.find(a => a.type === 'rpm');
   const appImage = assets.find(a => a.type === 'appimage');
-  const anyPackage = deb || rpm || appImage;
+  const anyReleaseDownload = deb || rpm || appImage;
 
   return (
     <main>
@@ -65,8 +65,8 @@ export default function Home() {
           <h1>Webcam controls<br/>for Linux.</h1>
           <p className="lead">CamTune gives you proper control over framing, image settings, presets, backgrounds and a virtual camera without turning into a streaming suite.</p>
           <div className="hero-actions">
-            <a className={`primary ${!anyPackage ? 'disabled' : ''}`} href="#download">
-              {anyPackage ? 'Download CamTune' : 'Packages publishing soon'}
+            <a className={`primary ${!anyReleaseDownload ? 'disabled' : ''}`} href="#download">
+              {anyReleaseDownload ? 'Download CamTune' : 'Release publishing soon'}
             </a>
             <a className="text-link" href={GITHUB} target="_blank" rel="noreferrer">Source on GitHub ↗</a>
           </div>
@@ -152,9 +152,9 @@ export default function Home() {
 
         {release === null ? (
           <div className="release-state">Checking GitHub Releases…</div>
-        ) : !release.available || !anyPackage ? (
+        ) : !release.available || !anyReleaseDownload ? (
           <div className="release-state publishing">
-            <div><strong>Packages are being published.</strong><p>This page is already connected to GitHub Releases. Package buttons will appear automatically as release assets are uploaded.</p></div>
+            <div><strong>Release downloads are being published.</strong><p>This page is connected directly to GitHub Releases. Download options will appear automatically as release assets are uploaded.</p></div>
             <a href={`${GITHUB}/releases`} target="_blank" rel="noreferrer">View releases ↗</a>
           </div>
         ) : (
