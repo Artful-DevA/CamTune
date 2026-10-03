@@ -24,7 +24,7 @@ select. It is not a recorder or streaming tool and does not try to replace OBS.
   **Start Virtual Camera** button with a status light.
 - **Viewer:** scroll to zoom, drag to move, double-click to reset. The bar beneath
   it has zoom, fit, Mirror and Flip.
-- **Inspector (right):** an icon rail switches between *Picture* (tone, color,
+- **Inspector (right):** an icon rail switches between *Picture* (light, color,
   detail) · *Framing* (transform, orientation, aspect, crop) · *Background* (blur
   or replace behind you, green screen…) · *Camera* (capture format and the
   settings stored in the webcam) · *Output* (virtual camera resolution and frame
@@ -42,8 +42,11 @@ select. It is not a recorder or streaming tool and does not try to replace OBS.
   Auto/manual modes are respected (manual controls are disabled while their
   automatic mode is on). Malformed controls reported by buggy firmware are
   skipped instead of crashing.
-- **Color (software)** – brightness, contrast, saturation, gamma, sharpness,
-  warmth and tint, applied through lookup tables fused into the resampling pass.
+- **Color (software)** – exposure, contrast, highlights, shadows, white and
+  black point, brightness, gamma, temperature, tint, vibrance (spares skin
+  tones), saturation, hue and sharpness. Tone and the per-channel color
+  controls are lookup tables fused into the resampling pass; vibrance and hue
+  add one small table lookup per chroma pixel only when they are in use.
 - **Framing** – smooth digital zoom (up to 8×), pan X/Y, crop per edge,
   quarter-turn rotation plus fine “level” rotation, horizontal mirror, vertical
   flip, and fill / fit / stretch aspect modes. Changes are animated so zoom and

@@ -264,6 +264,84 @@ TEST(color_luts)
     CHECK(y[16] == 16 && y[235] == 235);
 }
 
+TEST(tone_controls)
+{
+    uint8_t y[256], u[256], v[256];
+    auto monotonic = [&] {
+        for (int i = 17; i <= 235; ++i)
+            if (y[i] < y[i - 1])
+                return false;
+        return true;
+    };
+    ColorParams c;
+    c.blackPoint = 0.2; // limited-range input level 16 + 0.2 * 219 ≈ 60
+    c.whitePoint = 0.8; // ≈ 191
+    buildColorLuts(c, false, y, u, v);
+    CHECK(y[50] == 16 && y[60] <= 17);
+    CHECK(y[200] == 235 && y[191] >= 234);
+    CHECK(y[126] > 120 && y[126] < 132); // midpoint stays near the middle
+    CHECK(monotonic());
+
+    c = ColorParams();
+    c.exposure = 1.0;
+    buildColorLuts(c, false, y, u, v);
+    CHECK(y[100] > 115 && y[16] == 16 && monotonic());
+    c.exposure = -1.0;
+    buildColorLuts(c, false, y, u, v);
+    CHECK(y[100] < 85 && monotonic());
+
+    // Shadows act on dark tones, highlights on bright ones; extremes stay monotonic.
+    for (double s : {-1.0, 1.0}) {
+        for (double hl : {-1.0, 1.0}) {
+            c = ColorParams();
+            c.shadows = s;
+            c.highlights = hl;
+            buildColorLuts(c, false, y, u, v);
+            CHECK(monotonic());
+            CHECK(y[16] == 16 && y[235] == 235);
+        }
+    }
+    c = ColorParams();
+    c.shadows = 1.0;
+    buildColorLuts(c, false, y, u, v);
+    CHECK(y[89] > 89 + 20 && y[200] < 200 + 8);
+    c = ColorParams();
+    c.highlights = -1.0;
+    buildColorLuts(c, false, y, u, v);
+    CHECK(y[162] < 162 - 20 && y[50] > 50 - 8);
+}
+
+TEST(chroma_controls)
+{
+    std::vector<uint16_t> map(65536);
+    ColorParams c;
+    CHECK(!buildChromaMap(c, map.data()));
+    auto at = [&](int u, int v) { return map[(u << 8) | v]; };
+    auto chroma = [](uint16_t m) { return std::hypot((m >> 8) - 128.0, (m & 255) - 128.0); };
+
+    c.hue = 180;
+    CHECK(buildChromaMap(c, map.data()));
+    CHECK(at(128, 128) == ((128 << 8) | 128));
+    CHECK(at(168, 108) == ((88 << 8) | 148)); // rotated half a turn
+
+    c = ColorParams();
+    c.vibrance = 1.0;
+    CHECK(buildChromaMap(c, map.data()));
+    CHECK(at(128, 128) == ((128 << 8) | 128)); // grey stays grey
+    // A muted blue gains proportionally more than a strong blue.
+    const double mutedGain = chroma(at(143, 123)) / std::hypot(15.0, 5.0);
+    const double strongGain = chroma(at(220, 100)) / std::hypot(92.0, 28.0);
+    CHECK(mutedGain > 1.5 && strongGain < 1.15);
+    // Skin tones (low Cb, high Cr) are boosted less than an equally muted blue.
+    const double skinGain = chroma(at(113, 143)) / std::hypot(15.0, 15.0);
+    const double blueGain = chroma(at(143, 113)) / std::hypot(15.0, 15.0);
+    CHECK(skinGain < blueGain);
+
+    c.vibrance = -1.0;
+    buildChromaMap(c, map.data());
+    CHECK(chroma(at(220, 100)) < 10); // strong colors fade out
+}
+
 TEST(mjpeg_roundtrip)
 {
     const int w = 320, h = 240;

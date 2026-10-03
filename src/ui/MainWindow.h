@@ -123,6 +123,7 @@ private:
     QVector<cam::CaptureRequest> m_modeEntries;
 
     SliderRow *m_brightness, *m_contrast, *m_saturation, *m_gamma, *m_sharpness, *m_warmth, *m_tint;
+    SliderRow *m_exposure, *m_highlights, *m_shadows, *m_whitePoint, *m_blackPoint, *m_vibrance, *m_hue;
     SliderRow *m_zoom, *m_panX, *m_panY, *m_straighten;
     SliderRow *m_cropL, *m_cropT, *m_cropR, *m_cropB;
     QComboBox *m_rotation = nullptr;

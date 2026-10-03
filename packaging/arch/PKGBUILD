@@ -1,6 +1,6 @@
 # Maintainer: Artful-DevA <246381290+Artful-DevA@users.noreply.github.com>
 pkgname=camtune
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc="Webcam controls and low-latency virtual camera for video calls"
 arch=('x86_64' 'aarch64')

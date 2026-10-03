@@ -32,6 +32,11 @@ bool planeViews(const Frame &f, PlaneView views[3], bool &hasChroma);
 void buildColorLuts(const ColorParams &c, bool inputFullRange, uint8_t yLut[256], uint8_t uLut[256],
                     uint8_t vLut[256]);
 
+// Builds the 2D chroma table (index (u << 8) | v, value (u' << 8) | v') for
+// vibrance and hue on limited-range output. Returns false, leaving the table
+// untouched, when the setting needs no chroma pass.
+bool buildChromaMap(const ColorParams &c, uint16_t *map);
+
 // Converts an I420 frame to packed YUYV (chroma rows are shared between line pairs).
 void packI420ToYuyv(const Frame &src, uint8_t *dst, int dstStride);
 
@@ -59,6 +64,7 @@ private:
                      uint8_t border);
     void fillPlane(uint8_t *dst, int stride, int w, int h, uint8_t value);
     void sharpen(Frame &dst);
+    void applyChromaMap(Frame &dst);
 
     ThreadPool m_pool;
     ColorParams m_color;
@@ -67,6 +73,8 @@ private:
     uint8_t m_yLut[256];
     uint8_t m_uLut[256];
     uint8_t m_vLut[256];
+    std::vector<uint16_t> m_chromaMap;
+    bool m_chromaMapActive = false;
 
     // Per-call scratch, reused across frames to avoid allocation.
     std::vector<int32_t> m_colOff0, m_colOff1;

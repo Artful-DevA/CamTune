@@ -57,7 +57,11 @@ QJsonObject toJson(const cam::ColorParams &c)
 {
     return QJsonObject{{"brightness", c.brightness}, {"contrast", c.contrast}, {"saturation", c.saturation},
                        {"gamma", c.gamma},           {"sharpness", c.sharpness}, {"warmth", c.warmth},
-                       {"tint", c.tint}};
+                       {"tint", c.tint},
+                       {"exposure", c.exposure},     {"blackPoint", c.blackPoint},
+                       {"whitePoint", c.whitePoint}, {"highlights", c.highlights},
+                       {"shadows", c.shadows},       {"vibrance", c.vibrance},
+                       {"hue", c.hue}};
 }
 
 cam::ColorParams colorFromJson(const QJsonObject &o)
@@ -70,6 +74,13 @@ cam::ColorParams colorFromJson(const QJsonObject &o)
     c.sharpness = num(o, "sharpness", c.sharpness, 0, 2);
     c.warmth = num(o, "warmth", c.warmth, -1, 1);
     c.tint = num(o, "tint", c.tint, -1, 1);
+    c.exposure = num(o, "exposure", c.exposure, -2, 2);
+    c.blackPoint = num(o, "blackPoint", c.blackPoint, 0, 0.5);
+    c.whitePoint = num(o, "whitePoint", c.whitePoint, 0.5, 1);
+    c.highlights = num(o, "highlights", c.highlights, -1, 1);
+    c.shadows = num(o, "shadows", c.shadows, -1, 1);
+    c.vibrance = num(o, "vibrance", c.vibrance, -1, 1);
+    c.hue = num(o, "hue", c.hue, -180, 180);
     return c;
 }
 

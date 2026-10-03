@@ -19,16 +19,28 @@ struct ColorParams {
     double sharpness = 0.0;  //  0 .. 2   (unsharp mask amount, extra pass when > 0)
     double warmth = 0.0;     // -1 .. 1   (blue <-> amber chroma shift)
     double tint = 0.0;       // -1 .. 1   (green <-> magenta chroma shift)
+    double exposure = 0.0;   // -2 .. 2   stops, applied in approximately linear light
+    double blackPoint = 0.0; //  0 .. 0.5 input level that becomes black
+    double whitePoint = 1.0; //  0.5 .. 1 input level that becomes white
+    double highlights = 0.0; // -1 .. 1   recovers (-) or brightens (+) the bright tones
+    double shadows = 0.0;    // -1 .. 1   deepens (-) or lifts (+) the dark tones
+    double vibrance = 0.0;   // -1 .. 1   saturation weighted towards muted colors, sparing skin
+    double hue = 0.0;        // -180 .. 180 degrees of chroma rotation
 
+    // True when vibrance or hue need the per-pixel chroma pass.
+    bool hasChromaMap() const { return vibrance != 0.0 || hue != 0.0; }
     bool isIdentity() const
     {
         return brightness == 0.0 && contrast == 1.0 && saturation == 1.0 && gamma == 1.0 &&
-               warmth == 0.0 && tint == 0.0;
+               warmth == 0.0 && tint == 0.0 && exposure == 0.0 && blackPoint == 0.0 && whitePoint == 1.0 &&
+               highlights == 0.0 && shadows == 0.0 && !hasChromaMap();
     }
     bool operator==(const ColorParams &o) const
     {
         return brightness == o.brightness && contrast == o.contrast && saturation == o.saturation &&
-               gamma == o.gamma && sharpness == o.sharpness && warmth == o.warmth && tint == o.tint;
+               gamma == o.gamma && sharpness == o.sharpness && warmth == o.warmth && tint == o.tint &&
+               exposure == o.exposure && blackPoint == o.blackPoint && whitePoint == o.whitePoint &&
+               highlights == o.highlights && shadows == o.shadows && vibrance == o.vibrance && hue == o.hue;
     }
     bool operator!=(const ColorParams &o) const { return !(*this == o); }
 };

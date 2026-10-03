@@ -76,9 +76,20 @@ void buildColorLuts(const ColorParams &c, bool inputFullRange, uint8_t yLut[256]
     const double gamma = std::clamp(c.gamma, 0.1, 10.0);
     const double invGamma = 1.0 / gamma;
     const double sat = std::clamp(c.saturation, 0.0, 4.0);
+    const double black = std::clamp(c.blackPoint, 0.0, 0.5);
+    const double white = std::max(black + 0.05, std::clamp(c.whitePoint, 0.5, 1.0));
+    const double exposureGain = std::exp2(std::clamp(c.exposure, -4.0, 4.0));
+    // Bumps peaking at 1/3 (shadows) and 2/3 (highlights). The amplitude keeps the
+    // curve monotonic at the slider ends: max slope of x(1-x)^2 * 27/4 is 27/4.
+    const double shadowAmt = std::clamp(c.shadows, -1.0, 1.0) * 0.14;
+    const double highlightAmt = std::clamp(c.highlights, -1.0, 1.0) * 0.14;
 
     for (int i = 0; i < 256; ++i) {
         double x = inputFullRange ? i / 255.0 : (i - 16) / 219.0;
+        x = std::clamp((x - black) / (white - black), 0.0, 1.0);
+        if (exposureGain != 1.0)
+            x = std::pow(std::min(1.0, std::pow(x, 2.2) * exposureGain), 1.0 / 2.2);
+        x += shadowAmt * 6.75 * x * (1 - x) * (1 - x) + highlightAmt * 6.75 * x * x * (1 - x);
         x = (x - 0.5) * contrast + 0.5 + brightness;
         x = std::clamp(x, 0.0, 1.0);
         if (gamma != 1.0)
@@ -98,6 +109,47 @@ void buildColorLuts(const ColorParams &c, bool inputFullRange, uint8_t yLut[256]
         uLut[i] = clamp8(int(std::lround(std::clamp(u, 16.0, 240.0))));
         vLut[i] = clamp8(int(std::lround(std::clamp(v, 16.0, 240.0))));
     }
+}
+
+bool buildChromaMap(const ColorParams &c, uint16_t *map)
+{
+    if (!c.hasChromaMap())
+        return false;
+    const double vib = std::clamp(c.vibrance, -1.0, 1.0);
+    constexpr double kPi = 3.14159265358979323846;
+    const double rot = std::clamp(c.hue, -180.0, 180.0) * kPi / 180.0;
+    const double cr = std::cos(rot), sr = std::sin(rot);
+    // Typical skin sits around this angle in the Cb/Cr plane (Cb low, Cr high).
+    constexpr double kSkinAngle = 2.25, kSkinWidth = 0.45;
+    for (int u = 0; u < 256; ++u) {
+        for (int v = 0; v < 256; ++v) {
+            double cu = (u - 128) / 112.0, cv = (v - 128) / 112.0;
+            if (vib != 0.0) {
+                const double m = std::hypot(cu, cv);
+                const double t = std::min(1.0, m / 0.7); // 0 = grey, 1 = strongly colored
+                double gain;
+                if (vib > 0) {
+                    double d = std::atan2(cv, cu) - kSkinAngle;
+                    d = std::remainder(d, 2 * kPi);
+                    const double skin = std::exp(-(d * d) / (kSkinWidth * kSkinWidth));
+                    gain = 1.0 + vib * 1.5 * (1 - t) * (1 - t) * (1 - 0.6 * skin);
+                } else {
+                    gain = 1.0 + vib * (0.5 + 0.5 * t); // strong colors fade first
+                }
+                cu *= gain;
+                cv *= gain;
+            }
+            if (rot != 0.0) {
+                const double ru = cu * cr - cv * sr;
+                cv = cu * sr + cv * cr;
+                cu = ru;
+            }
+            const int ou = clamp8(int(std::lround(std::clamp(128.0 + cu * 112.0, 16.0, 240.0))));
+            const int ov = clamp8(int(std::lround(std::clamp(128.0 + cv * 112.0, 16.0, 240.0))));
+            map[(u << 8) | v] = uint16_t((ou << 8) | ov);
+        }
+    }
+    return true;
 }
 
 void packI420ToYuyv(const Frame &src, uint8_t *dst, int dstStride)
@@ -324,6 +376,8 @@ bool Processor::process(const Frame &src, Frame &dst, const FramingParams &frami
 
     if (!m_lutValid || m_lutFullRange != src.fullRange) {
         buildColorLuts(m_color, src.fullRange, m_yLut, m_uLut, m_vLut);
+        m_chromaMap.resize(65536);
+        m_chromaMapActive = buildChromaMap(m_color, m_chromaMap.data());
         m_lutFullRange = src.fullRange;
         m_lutValid = true;
     }
@@ -365,11 +419,31 @@ bool Processor::process(const Frame &src, Frame &dst, const FramingParams &frami
         samplePlane(sv, out, outStride, dw, dh, ax, bx, cx, ay, by, cy, lut, border);
     }
 
+    if (m_chromaMapActive && hasChroma)
+        applyChromaMap(dst);
     if (doSharpen)
         sharpen(dst);
 
     m_effects.apply(dst, m_pool);
     return true;
+}
+
+void Processor::applyChromaMap(Frame &dst)
+{
+    const int cw = dst.width / 2, ch = dst.height / 2;
+    const uint16_t *map = m_chromaMap.data();
+    auto rows = [&](int jb, int je) {
+        for (int j = jb; j < je; ++j) {
+            uint8_t *u = dst.plane[1] + size_t(j) * dst.stride[1];
+            uint8_t *v = dst.plane[2] + size_t(j) * dst.stride[2];
+            for (int i = 0; i < cw; ++i) {
+                const uint16_t m = map[(u[i] << 8) | v[i]];
+                u[i] = uint8_t(m >> 8);
+                v[i] = uint8_t(m);
+            }
+        }
+    };
+    m_pool.parallelFor(ch, rows, 16);
 }
 
 // Unsharp mask on luma: out = y + amount * (y - blur3x3(y)).

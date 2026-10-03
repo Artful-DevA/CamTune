@@ -520,37 +520,59 @@ QWidget *MainWindow::buildPicturePage()
     v->setContentsMargins(0, 0, 0, 0);
     v->setSpacing(0);
 
-    auto *tone = new Section(tr("Tone"));
-    m_brightness = new SliderRow(tr("Brightness"), -0.5, 0.5, 0, 0, QString(), 200);
+    auto *tone = new Section(tr("Light"));
+    m_exposure = new SliderRow(tr("Exposure"), -2, 2, 0, 2, QStringLiteral(" EV"));
+    m_exposure->setHint(tr("Overall brightness in camera stops, like opening the lens"));
     m_contrast = new SliderRow(tr("Contrast"), 0.2, 2.5, 1, 0, QStringLiteral(" %"), 100);
+    m_highlights = new SliderRow(tr("Highlights"), -1, 1, 0, 0, QString(), 100);
+    m_highlights->setHint(tr("Recover a bright window or lamp (−) or brighten light areas (+)"));
+    m_shadows = new SliderRow(tr("Shadows"), -1, 1, 0, 0, QString(), 100);
+    m_shadows->setHint(tr("Lift a dark face or background (+) or deepen dark areas (−)"));
+    m_whitePoint = new SliderRow(tr("White point"), 0.5, 1, 1, 0, QStringLiteral(" %"), 100);
+    m_whitePoint->setHint(tr("The brightness that becomes pure white. Lower it if the image looks dull"));
+    m_blackPoint = new SliderRow(tr("Black point"), 0, 0.5, 0, 0, QStringLiteral(" %"), 100);
+    m_blackPoint->setHint(tr("The darkness that becomes pure black. Raise it if blacks look washed out"));
+    m_brightness = new SliderRow(tr("Brightness"), -0.5, 0.5, 0, 0, QString(), 200);
     m_gamma = new SliderRow(tr("Gamma"), 0.3, 3.0, 1, 2);
     m_gamma->setHint(tr("Brightens or darkens the midtones without clipping highlights"));
-    for (auto *s : {m_brightness, m_contrast, m_gamma})
+    for (auto *s : {m_exposure, m_contrast, m_highlights, m_shadows, m_whitePoint, m_blackPoint, m_brightness,
+                    m_gamma})
         tone->contentLayout()->addWidget(s);
-    tone->addHeaderAction(icons::get(icons::Name::Reset), tr("Reset tone"), [this] {
+    tone->addHeaderAction(icons::get(icons::Name::Reset), tr("Reset light"), [this] {
         cam::ColorParams c = m_ctl.color();
         const cam::ColorParams d;
-        c.brightness = d.brightness;
+        c.exposure = d.exposure;
         c.contrast = d.contrast;
+        c.highlights = d.highlights;
+        c.shadows = d.shadows;
+        c.whitePoint = d.whitePoint;
+        c.blackPoint = d.blackPoint;
+        c.brightness = d.brightness;
         c.gamma = d.gamma;
         m_ctl.setColor(c);
     });
     v->addWidget(tone);
 
     auto *color = new Section(tr("Color"));
-    m_saturation = new SliderRow(tr("Saturation"), 0, 2.5, 1, 0, QStringLiteral(" %"), 100);
     m_warmth = new SliderRow(tr("Temperature"), -1, 1, 0, 0, QString(), 100);
     m_warmth->setHint(tr("Cooler (blue) ← → warmer (amber)"));
     m_tint = new SliderRow(tr("Tint"), -1, 1, 0, 0, QString(), 100);
     m_tint->setHint(tr("Green ← → magenta"));
-    for (auto *s : {m_saturation, m_warmth, m_tint})
+    m_vibrance = new SliderRow(tr("Vibrance"), -1, 1, 0, 0, QString(), 100);
+    m_vibrance->setHint(tr("Boosts muted colors more than strong ones and keeps skin tones natural"));
+    m_saturation = new SliderRow(tr("Saturation"), 0, 2.5, 1, 0, QStringLiteral(" %"), 100);
+    m_hue = new SliderRow(tr("Hue"), -180, 180, 0, 0, QStringLiteral("°"));
+    m_hue->setHint(tr("Rotates every color around the color wheel"));
+    for (auto *s : {m_warmth, m_tint, m_vibrance, m_saturation, m_hue})
         color->contentLayout()->addWidget(s);
     color->addHeaderAction(icons::get(icons::Name::Reset), tr("Reset color"), [this] {
         cam::ColorParams c = m_ctl.color();
         const cam::ColorParams d;
-        c.saturation = d.saturation;
         c.warmth = d.warmth;
         c.tint = d.tint;
+        c.vibrance = d.vibrance;
+        c.saturation = d.saturation;
+        c.hue = d.hue;
         m_ctl.setColor(c);
     });
     v->addWidget(color);
@@ -561,7 +583,8 @@ QWidget *MainWindow::buildPicturePage()
     v->addWidget(detail);
     v->addStretch(1);
 
-    for (SliderRow *s : {m_brightness, m_contrast, m_saturation, m_gamma, m_sharpness, m_warmth, m_tint})
+    for (SliderRow *s : {m_brightness, m_contrast, m_saturation, m_gamma, m_sharpness, m_warmth, m_tint, m_exposure,
+                         m_highlights, m_shadows, m_whitePoint, m_blackPoint, m_vibrance, m_hue})
         connect(s, &SliderRow::valueChanged, this, &MainWindow::pushColor);
     return w;
 }
@@ -847,6 +870,13 @@ void MainWindow::syncColor()
     m_sharpness->setValue(c.sharpness);
     m_warmth->setValue(c.warmth);
     m_tint->setValue(c.tint);
+    m_exposure->setValue(c.exposure);
+    m_highlights->setValue(c.highlights);
+    m_shadows->setValue(c.shadows);
+    m_whitePoint->setValue(c.whitePoint);
+    m_blackPoint->setValue(c.blackPoint);
+    m_vibrance->setValue(c.vibrance);
+    m_hue->setValue(c.hue);
 }
 
 void MainWindow::syncFraming()
@@ -1133,6 +1163,13 @@ void MainWindow::pushColor()
     c.sharpness = m_sharpness->value();
     c.warmth = m_warmth->value();
     c.tint = m_tint->value();
+    c.exposure = m_exposure->value();
+    c.highlights = m_highlights->value();
+    c.shadows = m_shadows->value();
+    c.whitePoint = m_whitePoint->value();
+    c.blackPoint = m_blackPoint->value();
+    c.vibrance = m_vibrance->value();
+    c.hue = m_hue->value();
     m_ctl.setColor(c);
 }
 
