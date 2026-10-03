@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const REPO = 'Artful-DevA/CamTune';
+const REPO = 'Artful-DevA/CamTune-Linux-Camera-Controls';
 const RELEASES_URL = `https://github.com/${REPO}/releases`;
 
 type GHAsset = { name: string; browser_download_url: string; size: number };
@@ -21,11 +21,11 @@ export async function GET() {
   try {
     const response = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
       headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'CamTune-Website' },
-      next: { revalidate: 300 }
+      next: { revalidate: 60 }
     });
 
     if (response.status === 404) {
-      return NextResponse.json({ available: false, assets: [], releaseUrl: RELEASES_URL }, { headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300' } });
+      return NextResponse.json({ available: false, assets: [], releaseUrl: RELEASES_URL }, { headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' } });
     }
     if (!response.ok) throw new Error(`GitHub returned ${response.status}`);
 
@@ -44,7 +44,7 @@ export async function GET() {
       publishedAt: data.published_at,
       assets,
       releaseUrl: data.html_url || RELEASES_URL
-    }, { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=900' } });
+    }, { headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' } });
   } catch {
     return NextResponse.json({ available: false, assets: [], releaseUrl: RELEASES_URL, error: 'release_lookup_failed' }, { status: 200, headers: { 'Cache-Control': 'public, s-maxage=30' } });
   }
