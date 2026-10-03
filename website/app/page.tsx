@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 type Asset = { name: string; url: string; size: number; type: string };
 type ReleaseData = { available: boolean; tag?: string; name?: string; publishedAt?: string; assets?: Asset[]; releaseUrl: string };
 
-const GITHUB = 'https://github.com/Artful-DevA/CamTune';
+const GITHUB = 'https://github.com/Artful-DevA/CamTune-Linux-Camera-Controls';
 
 function formatSize(bytes: number) {
   if (!bytes) return '';
