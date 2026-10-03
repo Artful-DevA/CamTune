@@ -15,14 +15,20 @@ select. It is not a recorder or streaming tool and does not try to replace OBS.
 
 ## The window
 
-- **Header:** camera picker, **Presets** menu, the **Virtual camera** switch and a ☰ menu.
-- **Preview:** scroll to zoom, drag to move, double-click to reset. Underneath: zoom,
-  mirror, reset and one-click preset chips, plus a plain-language status line.
-- **Side panel tabs:** *Picture* (light, color, detail) · *Framing* (zoom & position,
-  rotation, straighten, mirror, crop) · *Background* (blur or replace behind you,
-  green screen…) · *Camera* (settings stored in the webcam) · *Output* (virtual
-  camera, resolution, frame rate, app preferences).
-- The mouse wheel never changes a slider you haven't clicked; over the side panel it
+- **Menu bar:** File (Preferences), View (zoom, pause preview), Presets (save,
+  manage, Ctrl+1…9), Tools (virtual camera, setup, rescan cameras), Help.
+- **Toolbar:** camera picker, preset picker with save/manage buttons, and the
+  **Start Virtual Camera** button with a status light.
+- **Viewer:** scroll to zoom, drag to move, double-click to reset. The bar beneath
+  it has zoom, fit, Mirror and Flip.
+- **Inspector (right):** an icon rail switches between *Picture* (tone, color,
+  detail) · *Framing* (transform, orientation, aspect, crop) · *Background* (blur
+  or replace behind you, green screen…) · *Camera* (capture format and the
+  settings stored in the webcam) · *Output* (virtual camera resolution and frame
+  rate). Every section collapses and has its own reset.
+- **Status bar:** camera state, input format/fps, virtual camera state and
+  per-frame processing time / latency.
+- The mouse wheel never changes a slider you haven't clicked; over the inspector it
   just scrolls.
 
 ## Features
@@ -166,7 +172,7 @@ the build machine.
 ## Virtual camera setup
 
 The virtual camera is provided by the `v4l2loopback` kernel module. Use
-**Output tab → Set up virtual camera…** (asks for your password via polkit) or run
+**Tools → Set Up Virtual Camera…** (asks for your password via polkit) or run
 the helper yourself:
 
 ```sh
@@ -195,7 +201,7 @@ via `mokutil`; the package installers usually walk you through it.
 Notes:
 
 - Leave CamTune running (closing the window keeps it in the tray). With
-  *Output tab → Start when I log in* the virtual camera is always there.
+  *File → Preferences → Start CamTune when I log in* the virtual camera is always there.
 - With `exclusive_caps=1` the virtual camera is only advertised while Camera
   Adjust is sending to it. If a call app was started first, re-open its camera
   menu (or restart its video) after enabling the virtual camera.
@@ -229,7 +235,7 @@ interface `io.github.CamTune1`: `ApplyPreset`, `ListPresets`,
 `ToggleVirtualCamera`, `ShowWindow`, `Status`, `Quit`). If no instance is
 running, the app is started and the command applied.
 
-**Global hotkeys while Zoom has focus:** enable *Output tab → Shortcuts from any app*
+**Global hotkeys while Zoom has focus:** enable *File → Preferences → Global shortcuts*
 to register Ctrl+Alt+1…9 (presets), Ctrl+Alt+Up/Down (zoom), Ctrl+Alt+0 (reset)
 and Ctrl+Alt+V (virtual camera) through the XDG desktop portal (KDE Plasma,
 GNOME 48+, Hyprland…; your desktop lets you change the keys). On any desktop,
@@ -243,7 +249,7 @@ Settings live in `~/.config/CamTune/` (`camtune.conf`,
 
 | Symptom | Fix |
 | --- | --- |
-| “No virtual camera device found” | Load v4l2loopback (Output tab → Set up virtual camera…). |
+| “No virtual camera device found” | Load v4l2loopback (Tools → Set Up Virtual Camera…). |
 | Browser/Discord doesn't list “CamTune” | v4l2loopback must be loaded with `exclusive_caps=1`; virtual camera must be ON. |
 | “Camera is in use by another application” | Another app opened the physical camera; switch it to the virtual camera. CamTune retries automatically. |
 | “Cannot open … permission denied” | Add yourself to the `video` group (`sudo usermod -aG video $USER`, then log in again). |

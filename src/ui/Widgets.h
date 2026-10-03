@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-#include <QAbstractButton>
 #include <QColor>
 #include <QPushButton>
 #include <QWidget>
 
-class QButtonGroup;
+#include <functional>
+
 class QDoubleSpinBox;
 class QHBoxLayout;
 class QLabel;
@@ -16,11 +16,14 @@ class QVBoxLayout;
 
 namespace ui {
 
-// A labelled slider: name and value on one line, the slider below, and a
-// small reset button that only appears once the value differs from its default.
+// Width of the label column in the inspector, so all properties line up.
+constexpr int kLabelWidth = 96;
+
+// One inspector property: label · slider · value field · reset.
 //
 // Values are stored in model units; `displayScale` converts them for display
-// (e.g. 0..2.5 shown as 0..250 %).
+// (e.g. 0..2.5 shown as 0..250 %). The reset button only shows once the value
+// differs from its default.
 class SliderRow : public QWidget {
     Q_OBJECT
 public:
@@ -53,93 +56,26 @@ private:
     bool m_updating = false;
 };
 
-// An on/off switch.
-class ToggleSwitch : public QAbstractButton {
-    Q_OBJECT
-public:
-    explicit ToggleSwitch(QWidget *parent = nullptr);
-    QSize sizeHint() const override;
+// A label in the property column next to any field widget (combo, checkbox...).
+QWidget *propertyRow(const QString &label, QWidget *field, QWidget *extra = nullptr);
 
-protected:
-    void paintEvent(QPaintEvent *) override;
-    void enterEvent(QEnterEvent *) override;
-    void leaveEvent(QEvent *) override;
-
-private:
-    bool m_hover = false;
-};
-
-// Label (with optional description) on the left, switch on the right.
-class ToggleRow : public QWidget {
-    Q_OBJECT
-public:
-    ToggleRow(const QString &label, const QString &description = QString(), QWidget *parent = nullptr);
-    ToggleSwitch *toggle() const { return m_switch; }
-    bool isChecked() const;
-    // Updates the switch without emitting toggled.
-    void setChecked(bool on);
-
-Q_SIGNALS:
-    void toggled(bool on);
-
-private:
-    ToggleSwitch *m_switch;
-};
-
-// A row of mutually exclusive buttons ("segmented control").
-class SegmentedControl : public QWidget {
-    Q_OBJECT
-public:
-    explicit SegmentedControl(QWidget *parent = nullptr);
-    void addSegment(const QString &text, int data, const QString &tooltip = QString());
-    void setSegmentVisible(int data, bool visible);
-    int currentData() const;
-    // Selects without emitting changed.
-    void setCurrentData(int data);
-
-Q_SIGNALS:
-    void changed(int data);
-
-private:
-    void updateShapes();
-
-    QHBoxLayout *m_layout;
-    QButtonGroup *m_group;
-};
-
-// A selectable card with a title and a one-line description.
-class OptionCard : public QAbstractButton {
-    Q_OBJECT
-public:
-    OptionCard(const QString &title, const QString &description, QWidget *parent = nullptr);
-    QSize sizeHint() const override;
-
-protected:
-    void paintEvent(QPaintEvent *) override;
-    void enterEvent(QEnterEvent *) override;
-    void leaveEvent(QEvent *) override;
-
-private:
-    QString m_description;
-    bool m_hover = false;
-};
-
-// A titled group whose content can be collapsed.
+// A collapsible inspector group with a header bar.
 class Section : public QWidget {
     Q_OBJECT
 public:
-    explicit Section(const QString &title, bool collapsible = false, QWidget *parent = nullptr);
+    explicit Section(const QString &title, bool expanded = true, QWidget *parent = nullptr);
     QVBoxLayout *contentLayout() const { return m_layout; }
     void setExpanded(bool expanded);
-    bool isExpanded() const;
-
-Q_SIGNALS:
-    void expandedChanged(bool expanded);
+    bool isExpanded() const { return m_expanded; }
+    // Adds a small button at the right of the header (e.g. "reset group").
+    QToolButton *addHeaderAction(const QIcon &icon, const QString &tooltip, std::function<void()> fn);
 
 private:
-    QToolButton *m_toggle = nullptr;
+    QToolButton *m_header;
+    QHBoxLayout *m_headerLayout;
     QWidget *m_body;
     QVBoxLayout *m_layout;
+    bool m_expanded = true;
 };
 
 // A button showing and picking a color.
@@ -159,5 +95,8 @@ private:
 
 // Small muted explanatory text.
 QLabel *hintLabel(const QString &text);
+
+// A compact icon-only tool button.
+QToolButton *iconButton(const QIcon &icon, const QString &tooltip, bool checkable = false);
 
 } // namespace ui

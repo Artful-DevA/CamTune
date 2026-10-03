@@ -3,6 +3,7 @@
 
 #include "BackgroundPanel.h"
 #include "HardwareControlsPanel.h"
+#include "Icons.h"
 #include "PresetsPanel.h"
 #include "PreviewWidget.h"
 #include "Theme.h"
@@ -13,13 +14,19 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QButtonGroup>
+#include <QCheckBox>
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDoubleSpinBox>
+#include <QFormLayout>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMenu>
+#include <QMenuBar>
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QProcess>
@@ -28,10 +35,11 @@
 #include <QShortcut>
 #include <QSlider>
 #include <QSplitter>
+#include <QStackedWidget>
+#include <QStatusBar>
 #include <QStyle>
 #include <QSystemTrayIcon>
-#include <QTabBar>
-#include <QTabWidget>
+#include <QToolBar>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -53,10 +61,10 @@ QString formatName(uint32_t f)
 {
     switch (f) {
     case V4L2_PIX_FMT_MJPEG:
-    case V4L2_PIX_FMT_JPEG: return QObject::tr("compressed");
-    case V4L2_PIX_FMT_YUYV:
-    case V4L2_PIX_FMT_NV12:
-    case V4L2_PIX_FMT_YUV420: return QObject::tr("uncompressed");
+    case V4L2_PIX_FMT_JPEG: return QStringLiteral("MJPEG");
+    case V4L2_PIX_FMT_YUYV: return QStringLiteral("YUYV");
+    case V4L2_PIX_FMT_NV12: return QStringLiteral("NV12");
+    case V4L2_PIX_FMT_YUV420: return QStringLiteral("I420");
     default: return QString::fromStdString(cam::v4l2::fourccToString(f));
     }
 }
@@ -76,28 +84,36 @@ QIcon appIcon()
     return icon;
 }
 
-// A labelled combo box on one row.
-QWidget *comboRow(const QString &label, QComboBox *combo)
-{
-    auto *w = new QWidget;
-    auto *h = new QHBoxLayout(w);
-    h->setContentsMargins(0, 2, 0, 2);
-    h->addWidget(new QLabel(label), 1);
-    combo->setMinimumWidth(170);
-    h->addWidget(combo);
-    return w;
-}
-
-// A scrollable tab page.
-QWidget *page(QWidget *content)
+// Wraps an inspector page in a scroll area.
+QWidget *scrollPage(QWidget *content)
 {
     auto *scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->setFrameShape(QFrame::NoFrame);
-    content->setContentsMargins(16, 10, 18, 16);
     scroll->setWidget(content);
     return scroll;
+}
+
+// A label that draws nothing rather than a clipped fragment when squeezed.
+class FitLabel : public QLabel {
+public:
+    using QLabel::QLabel;
+
+protected:
+    void paintEvent(QPaintEvent *e) override
+    {
+        if (width() >= QLabel::sizeHint().width())
+            QLabel::paintEvent(e);
+    }
+};
+
+QFrame *statusSeparator()
+{
+    auto *f = new QFrame;
+    f->setObjectName(QStringLiteral("StatusSep"));
+    f->setFixedSize(1, 14);
+    return f;
 }
 
 } // namespace
@@ -108,24 +124,19 @@ MainWindow::MainWindow(app::Application &app, QWidget *parent)
     setWindowTitle(QStringLiteral("CamTune"));
     setWindowIcon(appIcon());
     m_previewPaused = m_app.settings().previewPaused();
-    m_showPerformance = m_app.settings().showPerformance();
-
-    auto *central = new QWidget;
-    auto *v = new QVBoxLayout(central);
-    v->setContentsMargins(0, 0, 0, 0);
-    v->setSpacing(0);
-    v->addWidget(buildHeader());
 
     m_splitter = new QSplitter(Qt::Horizontal);
     m_splitter->setHandleWidth(1);
-    m_splitter->addWidget(buildPreviewColumn());
-    m_splitter->addWidget(buildSidebar());
+    m_splitter->addWidget(buildViewer());
+    m_splitter->addWidget(buildInspector());
     m_splitter->setStretchFactor(0, 1);
     m_splitter->setStretchFactor(1, 0);
     m_splitter->setChildrenCollapsible(false);
-    v->addWidget(m_splitter, 1);
-    setCentralWidget(central);
+    setCentralWidget(m_splitter);
 
+    buildMenus();
+    buildToolBar();
+    buildStatusBar();
     buildTray();
     buildShortcuts();
 
@@ -178,102 +189,153 @@ MainWindow::MainWindow(app::Application &app, QWidget *parent)
 
     m_preview->setFocus(); // nothing highlighted at start
     if (!restoreGeometry(m_app.settings().windowGeometry()))
-        resize(1240, 760);
+        resize(1280, 780);
     if (!m_splitter->restoreState(m_app.settings().splitterState()))
-        m_splitter->setSizes({860, 380});
+        m_splitter->setSizes({900, 380});
 }
 
 MainWindow::~MainWindow() = default;
 
 // ---------------------------------------------------------------------------
-// Layout
+// Menus, toolbar, status bar
 // ---------------------------------------------------------------------------
 
-QWidget *MainWindow::buildHeader()
+void MainWindow::buildMenus()
 {
-    auto *bar = new QWidget;
-    bar->setObjectName(QStringLiteral("Header"));
-    bar->setAttribute(Qt::WA_StyledBackground);
-    auto *h = new QHBoxLayout(bar);
-    h->setContentsMargins(14, 8, 10, 8);
-    h->setSpacing(10);
+    QMenu *file = menuBar()->addMenu(tr("&File"));
+    QAction *prefs = file->addAction(tr("&Preferences…"), this, &MainWindow::showPreferences);
+    prefs->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Comma));
+    file->addSeparator();
+    QAction *quit = file->addAction(tr("&Quit"), this, [this] { m_app.quit(); });
+    quit->setShortcut(QKeySequence::Quit);
 
-    auto *logo = new QLabel;
-    logo->setPixmap(appIcon().pixmap(28, 28));
-    h->addWidget(logo);
-    auto *title = new QLabel(QStringLiteral("CamTune"));
-    title->setObjectName(QStringLiteral("AppTitle"));
-    h->addWidget(title);
-    h->addSpacing(18);
+    QMenu *view = menuBar()->addMenu(tr("&View"));
+    view->addAction(icons::get(icons::Name::ZoomIn), tr("Zoom &In"), this, [this] { m_app.adjustZoom(0.1); })
+        ->setShortcut(QKeySequence::ZoomIn);
+    view->addAction(icons::get(icons::Name::ZoomOut), tr("Zoom &Out"), this, [this] { m_app.adjustZoom(-0.1); })
+        ->setShortcut(QKeySequence::ZoomOut);
+    view->addAction(icons::get(icons::Name::Fit), tr("&Reset View"), this, [this] { m_app.resetFraming(); })
+        ->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_0));
+    view->addSeparator();
+    m_pauseAction = view->addAction(tr("&Pause Preview"));
+    m_pauseAction->setCheckable(true);
+    m_pauseAction->setChecked(m_previewPaused);
+    m_pauseAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_P));
+    m_pauseAction->setStatusTip(tr("Stop drawing the preview; the virtual camera keeps running"));
+    connect(m_pauseAction, &QAction::toggled, this, [this](bool on) {
+        m_previewPaused = on;
+        m_app.settings().setPreviewPaused(on);
+        updatePreviewWanted();
+    });
 
+    m_presetsMenu = menuBar()->addMenu(tr("P&resets"));
+
+    QMenu *tools = menuBar()->addMenu(tr("&Tools"));
+    m_vcamAction = tools->addAction(tr("&Virtual Camera"));
+    m_vcamAction->setCheckable(true);
+    m_vcamAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V));
+    connect(m_vcamAction, &QAction::triggered, this, [this](bool on) { m_ctl.setVirtualCameraEnabled(on); });
+    tools->addAction(tr("&Set Up Virtual Camera…"), this, &MainWindow::runVirtualCameraSetup);
+    tools->addSeparator();
+    tools->addAction(tr("&Rescan Cameras"), &m_ctl, &app::CameraController::refreshDevices)
+        ->setShortcut(QKeySequence(Qt::Key_F5));
+
+    QMenu *help = menuBar()->addMenu(tr("&Help"));
+    help->addAction(tr("&Command Line && Automation…"), this, &MainWindow::showAutomationHelp);
+    help->addAction(tr("&About CamTune"), this, &MainWindow::showAbout);
+}
+
+void MainWindow::buildToolBar()
+{
+    auto *tb = new QToolBar(tr("Main Toolbar"));
+    tb->setObjectName(QStringLiteral("MainToolBar"));
+    tb->setMovable(false);
+    tb->setFloatable(false);
+    tb->setIconSize(QSize(18, 18));
+    tb->toggleViewAction()->setEnabled(false);
+    addToolBar(Qt::TopToolBarArea, tb);
+
+    tb->addWidget(new QLabel(tr("Camera")));
     m_cameraCombo = new QComboBox;
-    m_cameraCombo->setMinimumWidth(240);
-    m_cameraCombo->setToolTip(tr("Which webcam to use"));
-    h->addWidget(m_cameraCombo);
-    h->addStretch(1);
+    m_cameraCombo->setMinimumWidth(220);
+    m_cameraCombo->setToolTip(tr("Video source"));
+    tb->addWidget(m_cameraCombo);
+    tb->addSeparator();
 
-    m_presetsButton = new QToolButton;
-    m_presetsButton->setObjectName(QStringLiteral("HeaderButton"));
-    m_presetsButton->setText(tr("Presets  ▾"));
-    m_presetsButton->setPopupMode(QToolButton::InstantPopup);
-    m_presetsMenu = new QMenu(m_presetsButton);
-    m_presetsButton->setMenu(m_presetsMenu);
-    h->addWidget(m_presetsButton);
-    h->addSpacing(8);
+    tb->addWidget(new QLabel(tr("Preset")));
+    m_presetCombo = new QComboBox;
+    m_presetCombo->setMinimumWidth(170);
+    m_presetCombo->setPlaceholderText(tr("Custom"));
+    m_presetCombo->setToolTip(tr("Apply a saved preset (Ctrl+1…9)"));
+    tb->addWidget(m_presetCombo);
+    tb->addAction(icons::get(icons::Name::Save), tr("Save current settings as a preset (Ctrl+S)"), this,
+                  &MainWindow::savePreset);
+    tb->addAction(icons::get(icons::Name::Manage), tr("Manage presets"), this, &MainWindow::managePresets);
 
-    // Virtual camera: the one switch that matters most.
-    auto *vcam = new QWidget;
-    auto *vh = new QHBoxLayout(vcam);
-    vh->setContentsMargins(0, 0, 0, 0);
-    vh->setSpacing(8);
-    m_vcamSwitch = new ToggleSwitch;
-    m_vcamSwitch->setToolTip(tr("Send the picture to video-call apps (Ctrl+Shift+V)"));
-    vh->addWidget(m_vcamSwitch);
-    auto *vt = new QVBoxLayout;
-    vt->setSpacing(0);
-    auto *vl = new QLabel(tr("Virtual camera"));
-    QFont bf = vl->font();
-    bf.setWeight(QFont::DemiBold);
-    vl->setFont(bf);
-    vt->addWidget(vl);
-    m_vcamState = new QLabel;
-    m_vcamState->setObjectName(QStringLiteral("Muted"));
-    QFont sf = m_vcamState->font();
-    sf.setPointSizeF(sf.pointSizeF() * 0.88);
-    m_vcamState->setFont(sf);
-    vt->addWidget(m_vcamState);
-    vh->addLayout(vt);
-    h->addWidget(vcam);
-    h->addSpacing(6);
+    auto *spacer = new QWidget;
+    spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    tb->addWidget(spacer);
 
-    auto *menuButton = new QToolButton;
-    menuButton->setObjectName(QStringLiteral("HeaderButton"));
-    menuButton->setText(QStringLiteral("☰"));
-    menuButton->setToolTip(tr("Menu"));
-    menuButton->setPopupMode(QToolButton::InstantPopup);
-    menuButton->setMenu(buildMainMenu());
-    h->addWidget(menuButton);
+    m_vcamButton = new QToolButton;
+    m_vcamButton->setObjectName(QStringLiteral("VirtualCamera"));
+    m_vcamButton->setCheckable(true);
+    m_vcamButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_vcamButton->setIconSize(QSize(12, 12));
+    m_vcamButton->setToolTip(tr("Send the picture to video-call apps as the “CamTune” camera (Ctrl+Shift+V)"));
+    tb->addWidget(m_vcamButton);
 
     connect(m_cameraCombo, qOverload<int>(&QComboBox::activated), this, [this](int idx) {
         const int i = m_cameraCombo->itemData(idx).toInt();
         if (i >= 0 && i < m_cameraEntries.size())
             m_ctl.setCamera(m_cameraEntries[i]);
     });
-    connect(m_vcamSwitch, &ToggleSwitch::toggled, this, [this](bool on) {
+    connect(m_presetCombo, qOverload<int>(&QComboBox::activated), this,
+            [this](int idx) { m_app.applyPresetIndex(idx); });
+    connect(m_vcamButton, &QToolButton::toggled, this, [this](bool on) {
         if (!m_syncing)
             m_ctl.setVirtualCameraEnabled(on);
     });
-    return bar;
 }
 
-QWidget *MainWindow::buildPreviewColumn()
+void MainWindow::buildStatusBar()
+{
+    QStatusBar *sb = statusBar();
+    sb->setSizeGripEnabled(false);
+    auto *left = new QWidget;
+    auto *lh = new QHBoxLayout(left);
+    lh->setContentsMargins(8, 0, 0, 0);
+    lh->setSpacing(6);
+    m_statusLed = new QLabel;
+    m_statusText = new QLabel;
+    m_statusText->setStyleSheet(QStringLiteral("padding: 0;"));
+    lh->addWidget(m_statusLed);
+    lh->addWidget(m_statusText);
+    lh->addStretch(1);
+    sb->addWidget(left, 1);
+    m_captureInfo = new QLabel;
+    m_outputInfo = new QLabel;
+    m_perfInfo = new QLabel;
+    m_perfInfo->setToolTip(tr("Processing time per frame and delay from camera to output"));
+    sb->addPermanentWidget(statusSeparator());
+    sb->addPermanentWidget(m_captureInfo);
+    sb->addPermanentWidget(statusSeparator());
+    sb->addPermanentWidget(m_outputInfo);
+    sb->addPermanentWidget(statusSeparator());
+    sb->addPermanentWidget(m_perfInfo);
+}
+
+// ---------------------------------------------------------------------------
+// Viewer
+// ---------------------------------------------------------------------------
+
+QWidget *MainWindow::buildViewer()
 {
     auto *col = new QWidget;
-    col->setObjectName(QStringLiteral("PreviewColumn"));
+    col->setObjectName(QStringLiteral("Viewer"));
     col->setAttribute(Qt::WA_StyledBackground);
     auto *v = new QVBoxLayout(col);
-    v->setContentsMargins(14, 12, 14, 10);
-    v->setSpacing(10);
+    v->setContentsMargins(0, 0, 0, 0);
+    v->setSpacing(0);
 
     m_banner = new QLabel;
     m_banner->setObjectName(QStringLiteral("Banner"));
@@ -285,60 +347,48 @@ QWidget *MainWindow::buildPreviewColumn()
     m_preview->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     v->addWidget(m_preview, 1);
 
-    // Quick controls under the picture.
     auto *bar = new QWidget;
-    bar->setObjectName(QStringLiteral("PreviewBar"));
+    bar->setObjectName(QStringLiteral("ViewerBar"));
     bar->setAttribute(Qt::WA_StyledBackground);
     auto *h = new QHBoxLayout(bar);
-    h->setContentsMargins(10, 6, 10, 6);
-    h->setSpacing(6);
-    auto *zoomOut = new QToolButton;
-    zoomOut->setText(QStringLiteral("−"));
-    zoomOut->setToolTip(tr("Zoom out (Ctrl+−)"));
-    auto *zoomIn = new QToolButton;
-    zoomIn->setText(QStringLiteral("+"));
-    zoomIn->setToolTip(tr("Zoom in (Ctrl++)"));
+    h->setContentsMargins(8, 3, 8, 3);
+    h->setSpacing(2);
+    auto *zoomOut = iconButton(icons::get(icons::Name::ZoomOut), tr("Zoom out (Ctrl+−)"));
+    auto *zoomIn = iconButton(icons::get(icons::Name::ZoomIn), tr("Zoom in (Ctrl++)"));
     m_zoomSlider = new QSlider(Qt::Horizontal);
     m_zoomSlider->setRange(100, 400);
-    m_zoomSlider->setFixedWidth(150);
-    m_zoomSlider->setToolTip(tr("Zoom — you can also scroll on the picture"));
-    m_zoomLabel = new QLabel(QStringLiteral("1.0×"));
-    m_zoomLabel->setObjectName(QStringLiteral("ValueText"));
-    m_zoomLabel->setFixedWidth(38);
+    m_zoomSlider->setFixedWidth(140);
+    m_zoomSlider->setToolTip(tr("Zoom (scroll on the picture to zoom, drag to move)"));
+    m_zoomLabel = new QLabel(QStringLiteral("100%"));
+    m_zoomLabel->setObjectName(QStringLiteral("Hint"));
+    m_zoomLabel->setFixedWidth(44);
+    m_zoomLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    auto *fit = iconButton(icons::get(icons::Name::Fit), tr("Reset view (Ctrl+0)"));
+    m_mirrorButton = iconButton(icons::get(icons::Name::Mirror), tr("Mirror left–right"), true);
+    m_flipButton = iconButton(icons::get(icons::Name::Flip), tr("Flip upside down"), true);
     h->addWidget(zoomOut);
     h->addWidget(m_zoomSlider);
     h->addWidget(zoomIn);
     h->addWidget(m_zoomLabel);
-    m_mirrorButton = new QPushButton(tr("Mirror"));
-    m_mirrorButton->setObjectName(QStringLiteral("Chip"));
-    m_mirrorButton->setCheckable(true);
-    m_mirrorButton->setToolTip(tr("Flip the picture left–right"));
+    h->addSpacing(10);
+    h->addWidget(fit);
+    h->addSpacing(10);
+    for (QToolButton *b : {m_mirrorButton, m_flipButton})
+        b->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_mirrorButton->setText(tr("Mirror"));
+    m_flipButton->setText(tr("Flip"));
     h->addWidget(m_mirrorButton);
-    auto *reset = new QPushButton(tr("Reset view"));
-    reset->setObjectName(QStringLiteral("Chip"));
-    reset->setToolTip(tr("Reset zoom and position (Ctrl+0, or double-click the picture)"));
-    h->addWidget(reset);
-    h->addStretch(1);
-    m_chipLayout = new QHBoxLayout;
-    m_chipLayout->setSpacing(6);
-    h->addLayout(m_chipLayout);
+    h->addWidget(m_flipButton);
+    auto *hint = new FitLabel(tr("Scroll to zoom · drag to move · double-click to reset"));
+    hint->setObjectName(QStringLiteral("Hint"));
+    hint->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    // Shrinks away instead of crowding the buttons in narrow windows.
+    hint->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    h->addWidget(hint, 1);
     v->addWidget(bar);
 
-    // Status line.
-    auto *status = new QHBoxLayout;
-    status->setContentsMargins(4, 0, 4, 0);
-    m_statusDot = new QLabel(QStringLiteral("●"));
-    m_statusText = new QLabel;
-    m_statusText->setObjectName(QStringLiteral("StatusText"));
-    m_perfText = new QLabel;
-    m_perfText->setObjectName(QStringLiteral("StatusText"));
-    status->addWidget(m_statusDot);
-    status->addWidget(m_statusText, 1);
-    status->addWidget(m_perfText);
-    v->addLayout(status);
-
     connect(m_zoomSlider, &QSlider::valueChanged, this, [this](int z) {
-        m_zoomLabel->setText(QStringLiteral("%1×").arg(z / 100.0, 0, 'f', 1));
+        m_zoomLabel->setText(QStringLiteral("%1%").arg(z));
         if (m_syncing)
             return;
         cam::FramingParams f = m_ctl.framing();
@@ -347,14 +397,21 @@ QWidget *MainWindow::buildPreviewColumn()
     });
     connect(zoomIn, &QToolButton::clicked, this, [this] { m_app.adjustZoom(0.1); });
     connect(zoomOut, &QToolButton::clicked, this, [this] { m_app.adjustZoom(-0.1); });
-    connect(m_mirrorButton, &QPushButton::toggled, this, [this](bool on) {
+    connect(fit, &QToolButton::clicked, this, [this] { m_app.resetFraming(); });
+    connect(m_mirrorButton, &QToolButton::toggled, this, [this](bool on) {
         if (m_syncing)
             return;
         cam::FramingParams f = m_ctl.framing();
         f.mirror = on;
         m_ctl.setFraming(f, 0);
     });
-    connect(reset, &QPushButton::clicked, this, [this] { m_app.resetFraming(); });
+    connect(m_flipButton, &QToolButton::toggled, this, [this](bool on) {
+        if (m_syncing)
+            return;
+        cam::FramingParams f = m_ctl.framing();
+        f.flip = on;
+        m_ctl.setFraming(f, 0);
+    });
     connect(m_preview, &PreviewWidget::zoomRequested, this, [this](double steps) {
         cam::FramingParams f = m_ctl.framing();
         f.zoom = std::clamp(f.zoom * std::pow(1.08, steps), 1.0, 8.0);
@@ -365,33 +422,84 @@ QWidget *MainWindow::buildPreviewColumn()
     return col;
 }
 
-QWidget *MainWindow::buildSidebar()
+// ---------------------------------------------------------------------------
+// Inspector
+// ---------------------------------------------------------------------------
+
+QWidget *MainWindow::buildInspector()
 {
-    auto *side = new QWidget;
-    side->setObjectName(QStringLiteral("Sidebar"));
-    side->setAttribute(Qt::WA_StyledBackground);
-    side->setMinimumWidth(340);
-    side->setMaximumWidth(520);
-    auto *v = new QVBoxLayout(side);
-    v->setContentsMargins(0, 0, 0, 0);
-    m_tabs = new QTabWidget;
-    m_tabs->setDocumentMode(true);
-    m_tabs->tabBar()->setExpanding(true);
-    m_tabs->addTab(page(buildPictureTab()), tr("Picture"));
-    m_tabs->addTab(page(buildFramingTab()), tr("Framing"));
+    auto *panel = new QWidget;
+    panel->setObjectName(QStringLiteral("Inspector"));
+    panel->setAttribute(Qt::WA_StyledBackground);
+    panel->setMinimumWidth(330);
+    panel->setMaximumWidth(560);
+    auto *h = new QHBoxLayout(panel);
+    h->setContentsMargins(0, 0, 0, 0);
+    h->setSpacing(0);
+
+    // Vertical page rail: never scrolls, never truncates.
+    auto *rail = new QWidget;
+    rail->setObjectName(QStringLiteral("InspectorRail"));
+    rail->setAttribute(Qt::WA_StyledBackground);
+    auto *rl = new QVBoxLayout(rail);
+    rl->setContentsMargins(0, 4, 0, 4);
+    rl->setSpacing(0);
+    m_rail = new QButtonGroup(this);
+    m_rail->setExclusive(true);
+
+    auto *right = new QWidget;
+    auto *rv = new QVBoxLayout(right);
+    rv->setContentsMargins(0, 0, 0, 0);
+    rv->setSpacing(0);
+    m_pageTitle = new QLabel;
+    m_pageTitle->setObjectName(QStringLiteral("InspectorTitle"));
+    rv->addWidget(m_pageTitle);
+    m_pages = new QStackedWidget;
+    rv->addWidget(m_pages, 1);
+
     auto *bg = new QWidget;
     auto *bgl = new QVBoxLayout(bg);
     bgl->setContentsMargins(0, 0, 0, 0);
     m_background = new BackgroundPanel(m_ctl, m_preview);
     bgl->addWidget(m_background);
-    m_tabs->addTab(page(bg), tr("Background"));
-    m_tabs->addTab(page(buildCameraTab()), tr("Camera"));
-    m_tabs->addTab(page(buildOutputTab()), tr("Output"));
-    v->addWidget(m_tabs);
+
+    const struct {
+        icons::Name icon;
+        QString title;
+        QWidget *page;
+    } pages[] = {
+        {icons::Name::Picture, tr("Picture"), buildPicturePage()},
+        {icons::Name::Framing, tr("Framing"), buildFramingPage()},
+        {icons::Name::Background, tr("Background"), bg},
+        {icons::Name::Camera, tr("Camera"), buildCameraPage()},
+        {icons::Name::Output, tr("Output"), buildOutputPage()},
+    };
+    int index = 0;
+    for (const auto &p : pages) {
+        auto *b = new QToolButton;
+        b->setObjectName(QStringLiteral("RailButton"));
+        b->setIcon(icons::get(p.icon));
+        b->setIconSize(QSize(22, 22));
+        b->setCheckable(true);
+        b->setToolTip(p.title);
+        b->setFocusPolicy(Qt::TabFocus);
+        m_rail->addButton(b, index++);
+        rl->addWidget(b);
+        m_pages->addWidget(scrollPage(p.page));
+        b->setProperty("title", p.title);
+    }
+    rl->addStretch(1);
+    h->addWidget(rail);
+    h->addWidget(right, 1);
 
     const int bgIndex = 2;
-    connect(m_tabs, &QTabWidget::currentChanged, this, [this, bgIndex](int i) {
-        // Outlines and drawing modes only make sense while the tab is open.
+    auto select = [this, bgIndex](int i) {
+        m_pages->setCurrentIndex(i);
+        if (auto *b = m_rail->button(i)) {
+            b->setChecked(true);
+            m_pageTitle->setText(b->property("title").toString());
+        }
+        // Outlines and drawing modes only make sense while that page is open.
         if (i == bgIndex) {
             m_background->syncFromModel();
         } else {
@@ -399,97 +507,108 @@ QWidget *MainWindow::buildSidebar()
             m_preview->setOverlayRects({});
         }
         m_app.settings().setLastTab(i);
-    });
-    m_tabs->setCurrentIndex(std::clamp(m_app.settings().lastTab(), 0, m_tabs->count() - 1));
-    if (m_tabs->currentIndex() != bgIndex)
-        m_preview->setOverlayRects({});
-    return side;
+    };
+    connect(m_rail, &QButtonGroup::idClicked, this, select);
+    select(std::clamp(m_app.settings().lastTab(), 0, m_pages->count() - 1));
+    return panel;
 }
 
-QWidget *MainWindow::buildPictureTab()
+QWidget *MainWindow::buildPicturePage()
 {
     auto *w = new QWidget;
     auto *v = new QVBoxLayout(w);
     v->setContentsMargins(0, 0, 0, 0);
+    v->setSpacing(0);
 
-    auto *light = new Section(tr("Light"));
+    auto *tone = new Section(tr("Tone"));
     m_brightness = new SliderRow(tr("Brightness"), -0.5, 0.5, 0, 0, QString(), 200);
     m_contrast = new SliderRow(tr("Contrast"), 0.2, 2.5, 1, 0, QStringLiteral(" %"), 100);
-    m_gamma = new SliderRow(tr("Midtones"), 0.3, 3.0, 1, 2);
-    m_gamma->setHint(tr("Brightens or darkens the middle tones without blowing out highlights (gamma)"));
+    m_gamma = new SliderRow(tr("Gamma"), 0.3, 3.0, 1, 2);
+    m_gamma->setHint(tr("Brightens or darkens the midtones without clipping highlights"));
     for (auto *s : {m_brightness, m_contrast, m_gamma})
-        light->contentLayout()->addWidget(s);
-    v->addWidget(light);
+        tone->contentLayout()->addWidget(s);
+    tone->addHeaderAction(icons::get(icons::Name::Reset), tr("Reset tone"), [this] {
+        cam::ColorParams c = m_ctl.color();
+        const cam::ColorParams d;
+        c.brightness = d.brightness;
+        c.contrast = d.contrast;
+        c.gamma = d.gamma;
+        m_ctl.setColor(c);
+    });
+    v->addWidget(tone);
 
     auto *color = new Section(tr("Color"));
     m_saturation = new SliderRow(tr("Saturation"), 0, 2.5, 1, 0, QStringLiteral(" %"), 100);
-    m_warmth = new SliderRow(tr("Warmth"), -1, 1, 0, 0, QString(), 100);
+    m_warmth = new SliderRow(tr("Temperature"), -1, 1, 0, 0, QString(), 100);
     m_warmth->setHint(tr("Cooler (blue) ← → warmer (amber)"));
     m_tint = new SliderRow(tr("Tint"), -1, 1, 0, 0, QString(), 100);
-    m_tint->setHint(tr("Greener ← → more magenta"));
+    m_tint->setHint(tr("Green ← → magenta"));
     for (auto *s : {m_saturation, m_warmth, m_tint})
         color->contentLayout()->addWidget(s);
+    color->addHeaderAction(icons::get(icons::Name::Reset), tr("Reset color"), [this] {
+        cam::ColorParams c = m_ctl.color();
+        const cam::ColorParams d;
+        c.saturation = d.saturation;
+        c.warmth = d.warmth;
+        c.tint = d.tint;
+        m_ctl.setColor(c);
+    });
     v->addWidget(color);
 
     auto *detail = new Section(tr("Detail"));
     m_sharpness = new SliderRow(tr("Sharpness"), 0, 2, 0, 0, QStringLiteral(" %"), 50);
     detail->contentLayout()->addWidget(m_sharpness);
     v->addWidget(detail);
+    v->addStretch(1);
 
     for (SliderRow *s : {m_brightness, m_contrast, m_saturation, m_gamma, m_sharpness, m_warmth, m_tint})
         connect(s, &SliderRow::valueChanged, this, &MainWindow::pushColor);
-    auto *reset = new QPushButton(tr("Reset picture"));
-    connect(reset, &QPushButton::clicked, this, [this] { m_ctl.setColor(cam::ColorParams()); });
-    v->addSpacing(6);
-    v->addWidget(reset);
-    v->addWidget(hintLabel(tr("These adjust the picture in CamTune. Settings stored in the camera itself "
-                              "are on the Camera tab.")));
-    v->addStretch(1);
     return w;
 }
 
-QWidget *MainWindow::buildFramingTab()
+QWidget *MainWindow::buildFramingPage()
 {
     auto *w = new QWidget;
     auto *v = new QVBoxLayout(w);
     v->setContentsMargins(0, 0, 0, 0);
+    v->setSpacing(0);
 
-    auto *view = new Section(tr("Zoom & position"));
+    auto *transform = new Section(tr("Transform"));
     m_zoom = new SliderRow(tr("Zoom"), 1, 8, 1, 2, QStringLiteral("×"));
-    m_panX = new SliderRow(tr("Left ↔ right"), -1, 1, 0, 0, QStringLiteral(" %"), 100);
-    m_panY = new SliderRow(tr("Up ↕ down"), -1, 1, 0, 0, QStringLiteral(" %"), 100);
-    m_panX->setHint(tr("Moves the view when zoomed in. You can also drag the picture."));
-    m_panY->setHint(tr("Moves the view when zoomed in. You can also drag the picture."));
+    m_panX = new SliderRow(tr("Position X"), -1, 1, 0, 0, QStringLiteral(" %"), 100);
+    m_panY = new SliderRow(tr("Position Y"), -1, 1, 0, 0, QStringLiteral(" %"), 100);
+    m_panX->setHint(tr("Moves the view when zoomed in (you can also drag the picture)"));
+    m_panY->setHint(tr("Moves the view when zoomed in (you can also drag the picture)"));
     for (auto *s : {m_zoom, m_panX, m_panY})
-        view->contentLayout()->addWidget(s);
-    v->addWidget(view);
+        transform->contentLayout()->addWidget(s);
+    transform->addHeaderAction(icons::get(icons::Name::Reset), tr("Reset view"), [this] { m_app.resetFraming(); });
+    v->addWidget(transform);
 
     auto *orient = new Section(tr("Orientation"));
-    m_rotation = new SegmentedControl;
+    m_rotation = new QComboBox;
     for (int deg : {0, 90, 180, 270})
-        m_rotation->addSegment(QStringLiteral("%1°").arg(deg), deg);
-    orient->contentLayout()->addWidget(new QLabel(tr("Rotate")));
-    orient->contentLayout()->addWidget(m_rotation);
+        m_rotation->addItem(QStringLiteral("%1°").arg(deg), deg);
+    orient->contentLayout()->addWidget(propertyRow(tr("Rotation"), m_rotation));
     m_straighten = new SliderRow(tr("Straighten"), -15, 15, 0, 1, QStringLiteral("°"));
-    m_straighten->setHint(tr("Fixes a slightly tilted camera"));
+    m_straighten->setHint(tr("Corrects a slightly tilted camera"));
     orient->contentLayout()->addWidget(m_straighten);
-    m_mirror = new ToggleRow(tr("Mirror"), tr("Others see you flipped left–right"));
-    m_flip = new ToggleRow(tr("Upside down"), tr("For cameras mounted upside down"));
-    orient->contentLayout()->addWidget(m_mirror);
-    orient->contentLayout()->addWidget(m_flip);
+    m_mirror = new QCheckBox(tr("Mirror left–right"));
+    m_mirror->setToolTip(tr("Call apps mirror your own self-view anyway; this changes what others see"));
+    m_flip = new QCheckBox(tr("Upside down"));
+    orient->contentLayout()->addWidget(propertyRow(tr("Flip"), m_mirror));
+    orient->contentLayout()->addWidget(propertyRow(QString(), m_flip));
     v->addWidget(orient);
 
-    auto *fit = new Section(tr("Shape"));
-    m_aspect = new SegmentedControl;
-    m_aspect->addSegment(tr("Fill"), int(cam::AspectMode::Fill), tr("Crop the edges so the picture fills the frame"));
-    m_aspect->addSegment(tr("Fit"), int(cam::AspectMode::Fit), tr("Show everything, with bars at the sides"));
-    m_aspect->addSegment(tr("Stretch"), int(cam::AspectMode::Stretch), tr("Squash the picture to fit"));
-    fit->contentLayout()->addWidget(m_aspect);
-    fit->contentLayout()->addWidget(
-        hintLabel(tr("Used when the camera's shape differs from the output (e.g. 4:3 vs 16:9).")));
-    v->addWidget(fit);
+    auto *aspect = new Section(tr("Aspect"));
+    m_aspect = new QComboBox;
+    m_aspect->addItem(tr("Fill (crop edges)"), int(cam::AspectMode::Fill));
+    m_aspect->addItem(tr("Fit (letterbox)"), int(cam::AspectMode::Fit));
+    m_aspect->addItem(tr("Stretch"), int(cam::AspectMode::Stretch));
+    m_aspect->setToolTip(tr("Used when the camera's aspect ratio differs from the output"));
+    aspect->contentLayout()->addWidget(propertyRow(tr("Scaling"), m_aspect));
+    v->addWidget(aspect);
 
-    auto *crop = new Section(tr("Crop edges"), true);
+    auto *crop = new Section(tr("Crop"), false);
     m_cropL = new SliderRow(tr("Left"), 0, 0.45, 0, 0, QStringLiteral(" %"), 100);
     m_cropR = new SliderRow(tr("Right"), 0, 0.45, 0, 0, QStringLiteral(" %"), 100);
     m_cropT = new SliderRow(tr("Top"), 0, 0.45, 0, 0, QStringLiteral(" %"), 100);
@@ -497,34 +616,29 @@ QWidget *MainWindow::buildFramingTab()
     for (auto *s : {m_cropL, m_cropR, m_cropT, m_cropB})
         crop->contentLayout()->addWidget(s);
     v->addWidget(crop);
-
-    auto *reset = new QPushButton(tr("Reset framing"));
-    connect(reset, &QPushButton::clicked, this, [this] { m_app.resetFraming(); });
-    v->addSpacing(6);
-    v->addWidget(reset);
     v->addStretch(1);
 
     for (SliderRow *s : {m_zoom, m_panX, m_panY, m_straighten, m_cropL, m_cropR, m_cropT, m_cropB})
         connect(s, &SliderRow::valueChanged, this, [this] { pushFraming(); });
-    connect(m_rotation, &SegmentedControl::changed, this, [this] { pushFraming(250); });
-    connect(m_aspect, &SegmentedControl::changed, this, [this] { pushFraming(0); });
-    connect(m_mirror, &ToggleRow::toggled, this, [this] { pushFraming(0); });
-    connect(m_flip, &ToggleRow::toggled, this, [this] { pushFraming(0); });
+    connect(m_rotation, qOverload<int>(&QComboBox::activated), this, [this] { pushFraming(250); });
+    connect(m_aspect, qOverload<int>(&QComboBox::activated), this, [this] { pushFraming(0); });
+    connect(m_mirror, &QCheckBox::toggled, this, [this] { pushFraming(0); });
+    connect(m_flip, &QCheckBox::toggled, this, [this] { pushFraming(0); });
     return w;
 }
 
-QWidget *MainWindow::buildCameraTab()
+QWidget *MainWindow::buildCameraPage()
 {
     auto *w = new QWidget;
     auto *v = new QVBoxLayout(w);
     v->setContentsMargins(0, 0, 0, 0);
+    v->setSpacing(0);
 
-    auto *mode = new Section(tr("Camera resolution"));
+    auto *capture = new Section(tr("Capture"));
     m_modeCombo = new QComboBox;
-    mode->contentLayout()->addWidget(m_modeCombo);
-    mode->contentLayout()->addWidget(
-        hintLabel(tr("“Automatic” picks the best mode for your output resolution and frame rate.")));
-    v->addWidget(mode);
+    m_modeCombo->setToolTip(tr("Resolution, frame rate and format requested from the camera"));
+    capture->contentLayout()->addWidget(propertyRow(tr("Format"), m_modeCombo));
+    v->addWidget(capture);
     connect(m_modeCombo, qOverload<int>(&QComboBox::activated), this, [this](int idx) {
         const int i = m_modeCombo->itemData(idx).toInt();
         if (i >= 0 && i < m_modeEntries.size())
@@ -540,120 +654,53 @@ QWidget *MainWindow::buildCameraTab()
     return w;
 }
 
-QWidget *MainWindow::buildOutputTab()
+QWidget *MainWindow::buildOutputPage()
 {
     auto *w = new QWidget;
     auto *v = new QVBoxLayout(w);
     v->setContentsMargins(0, 0, 0, 0);
+    v->setSpacing(0);
 
-    auto *vcam = new Section(tr("Virtual camera"));
-    m_outEnabled = new ToggleRow(tr("Send to video calls"),
-                                 tr("Then choose “CamTune” as the camera in Zoom, Meet, Teams, Discord…"));
-    vcam->contentLayout()->addWidget(m_outEnabled);
-    m_outStatus = new QLabel;
-    m_outStatus->setWordWrap(true);
+    auto *vcam = new Section(tr("Virtual Camera"));
+    m_outEnabled = new QCheckBox(tr("Enabled"));
+    vcam->contentLayout()->addWidget(propertyRow(tr("Output"), m_outEnabled));
+    m_outStatus = hintLabel(QString());
+    m_outStatus->setContentsMargins(kLabelWidth + 6, 0, 0, 4);
     vcam->contentLayout()->addWidget(m_outStatus);
-    m_setupButton = new QPushButton(tr("Set up virtual camera…"));
+    m_setupButton = new QPushButton(tr("Set Up Virtual Camera…"));
     m_setupButton->setObjectName(QStringLiteral("Primary"));
-    vcam->contentLayout()->addWidget(m_setupButton);
+    vcam->contentLayout()->addWidget(propertyRow(QString(), m_setupButton));
     m_outResolution = new QComboBox;
     for (auto &r : kResolutions)
         m_outResolution->addItem(QStringLiteral("%1 × %2").arg(r[0]).arg(r[1]), QSize(r[0], r[1]));
-    vcam->contentLayout()->addWidget(comboRow(tr("Resolution"), m_outResolution));
+    vcam->contentLayout()->addWidget(propertyRow(tr("Resolution"), m_outResolution));
     m_outFps = new QComboBox;
     for (int f : kFrameRates)
         m_outFps->addItem(tr("%1 fps").arg(f), f);
-    vcam->contentLayout()->addWidget(comboRow(tr("Frame rate"), m_outFps));
+    vcam->contentLayout()->addWidget(propertyRow(tr("Frame rate"), m_outFps));
     v->addWidget(vcam);
 
-    auto *compat = new Section(tr("Compatibility"), true);
+    auto *adv = new Section(tr("Compatibility"), false);
     m_outDevice = new QComboBox;
-    compat->contentLayout()->addWidget(comboRow(tr("Device"), m_outDevice));
+    adv->contentLayout()->addWidget(propertyRow(tr("Device"), m_outDevice));
     m_outFormat = new QComboBox;
-    m_outFormat->addItem(tr("Standard (recommended)"), int(cam::OutputPixelFormat::I420));
-    m_outFormat->addItem(tr("Alternative (YUYV)"), int(cam::OutputPixelFormat::YUYV));
-    compat->contentLayout()->addWidget(comboRow(tr("Video format"), m_outFormat));
-    compat->contentLayout()->addWidget(
-        hintLabel(tr("Only change these if an app does not show or accept the virtual camera.")));
-    v->addWidget(compat);
-
-    auto *appSec = new Section(tr("App"));
-    auto *login = new ToggleRow(tr("Start when I log in"), tr("So the virtual camera is always ready"));
-    login->setChecked(app::autostart::isEnabled());
-    auto *minimized = new ToggleRow(tr("Start hidden"), tr("Open in the system tray instead of a window"));
-    minimized->setChecked(m_app.settings().startMinimized());
-    auto *tray = new ToggleRow(tr("Keep running when closed"), tr("Closing the window keeps the virtual camera on"));
-    tray->setChecked(m_app.settings().closeToTray());
-    auto *global = new ToggleRow(tr("Shortcuts from any app"), tr("Ctrl+Alt+1…9 apply presets even while in a call"));
-    global->setChecked(m_app.settings().globalShortcuts());
-    auto *globalStatus = hintLabel(QString());
-    globalStatus->hide();
-    auto *perf = new ToggleRow(tr("Show performance info"), tr("Processing time and delay under the preview"));
-    perf->setChecked(m_showPerformance);
-    for (QWidget *x : {static_cast<QWidget *>(login), static_cast<QWidget *>(minimized),
-                       static_cast<QWidget *>(tray), static_cast<QWidget *>(global),
-                       static_cast<QWidget *>(globalStatus), static_cast<QWidget *>(perf)})
-        appSec->contentLayout()->addWidget(x);
-    v->addWidget(appSec);
+    m_outFormat->addItem(tr("I420 (recommended)"), int(cam::OutputPixelFormat::I420));
+    m_outFormat->addItem(tr("YUYV"), int(cam::OutputPixelFormat::YUYV));
+    adv->contentLayout()->addWidget(propertyRow(tr("Pixel format"), m_outFormat));
+    auto *note = hintLabel(tr("Change only if an application does not list or accept the virtual camera."));
+    note->setContentsMargins(kLabelWidth + 6, 2, 0, 0);
+    adv->contentLayout()->addWidget(note);
+    v->addWidget(adv);
     v->addStretch(1);
 
-    connect(m_outEnabled, &ToggleRow::toggled, this, [this](bool on) {
+    connect(m_outEnabled, &QCheckBox::toggled, this, [this](bool on) {
         if (!m_syncing)
             m_ctl.setVirtualCameraEnabled(on);
     });
     for (QComboBox *c : {m_outDevice, m_outResolution, m_outFps, m_outFormat})
         connect(c, qOverload<int>(&QComboBox::activated), this, &MainWindow::pushOutput);
     connect(m_setupButton, &QPushButton::clicked, this, &MainWindow::runVirtualCameraSetup);
-    connect(login, &ToggleRow::toggled, this, [this, login](bool on) {
-        QString err;
-        if (!app::autostart::setEnabled(on, &err)) {
-            QMessageBox::warning(this, tr("Start when I log in"), err);
-            login->setChecked(!on);
-        }
-    });
-    connect(minimized, &ToggleRow::toggled, this, [this](bool on) { m_app.settings().setStartMinimized(on); });
-    connect(tray, &ToggleRow::toggled, this, [this](bool on) { m_app.settings().setCloseToTray(on); });
-    connect(global, &ToggleRow::toggled, this, [this](bool on) { m_app.setGlobalShortcutsEnabled(on); });
-    connect(m_app.globalShortcuts(), &app::GlobalShortcuts::statusChanged, globalStatus, [this, globalStatus] {
-        // Only explain the portal state to someone who asked for global shortcuts.
-        const QString s = m_app.settings().globalShortcuts() ? m_app.globalShortcuts()->statusText() : QString();
-        globalStatus->setText(s);
-        globalStatus->setVisible(!s.isEmpty());
-    });
-    connect(perf, &ToggleRow::toggled, this, [this](bool on) {
-        m_showPerformance = on;
-        m_app.settings().setShowPerformance(on);
-        updateStatus();
-    });
     return w;
-}
-
-QMenu *MainWindow::buildMainMenu()
-{
-    auto *menu = new QMenu(this);
-    m_pauseAction = menu->addAction(tr("Pause preview"));
-    m_pauseAction->setCheckable(true);
-    m_pauseAction->setChecked(m_previewPaused);
-    m_pauseAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_P));
-    connect(m_pauseAction, &QAction::toggled, this, [this](bool on) {
-        m_previewPaused = on;
-        m_app.settings().setPreviewPaused(on);
-        updatePreviewWanted();
-    });
-    menu->addSeparator();
-    connect(menu->addAction(tr("Set up virtual camera…")), &QAction::triggered, this,
-            &MainWindow::runVirtualCameraSetup);
-    connect(menu->addAction(tr("Command line && automation…")), &QAction::triggered, this,
-            &MainWindow::showAutomationHelp);
-    connect(menu->addAction(tr("About CamTune")), &QAction::triggered, this, &MainWindow::showAbout);
-    menu->addSeparator();
-    QAction *quit = menu->addAction(tr("Quit"));
-    quit->setShortcut(QKeySequence::Quit);
-    connect(quit, &QAction::triggered, this, [this] { m_app.quit(); });
-    // Make the shortcuts work while the menu is closed.
-    addAction(m_pauseAction);
-    addAction(quit);
-    return menu;
 }
 
 void MainWindow::buildTray()
@@ -663,14 +710,14 @@ void MainWindow::buildTray()
     m_tray = new QSystemTrayIcon(appIcon(), this);
     m_tray->setToolTip(QStringLiteral("CamTune"));
     m_trayMenu = new QMenu(this);
-    m_trayShow = m_trayMenu->addAction(tr("Show window"));
+    m_trayShow = m_trayMenu->addAction(tr("Show CamTune"));
     connect(m_trayShow, &QAction::triggered, this, [this] {
         if (isVisible() && !isMinimized())
             hideToTray();
         else
             showAndRaise();
     });
-    m_trayVcam = m_trayMenu->addAction(tr("Virtual camera"));
+    m_trayVcam = m_trayMenu->addAction(tr("Virtual Camera"));
     m_trayVcam->setCheckable(true);
     connect(m_trayVcam, &QAction::triggered, this, [this](bool on) { m_ctl.setVirtualCameraEnabled(on); });
     m_trayPresets = m_trayMenu->addMenu(tr("Presets"));
@@ -686,28 +733,13 @@ void MainWindow::buildTray()
         }
     });
     connect(m_trayMenu, &QMenu::aboutToShow, this, [this] {
-        m_trayShow->setText(isVisible() && !isMinimized() ? tr("Hide window") : tr("Show window"));
+        m_trayShow->setText(isVisible() && !isMinimized() ? tr("Hide CamTune") : tr("Show CamTune"));
     });
     m_tray->show();
 }
 
 void MainWindow::buildShortcuts()
 {
-    for (int i = 1; i <= 9; ++i) {
-        auto *sc = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key(Qt::Key_0 + i)), this);
-        connect(sc, &QShortcut::activated, this, [this, i] {
-            const int idx = m_app.presets().indexForShortcut(i);
-            if (idx >= 0)
-                m_app.applyPresetIndex(idx);
-        });
-    }
-    connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_0), this), &QShortcut::activated, this,
-            [this] { m_app.resetFraming(); });
-    connect(new QShortcut(QKeySequence::ZoomIn, this), &QShortcut::activated, this, [this] { m_app.adjustZoom(0.1); });
-    connect(new QShortcut(QKeySequence::ZoomOut, this), &QShortcut::activated, this,
-            [this] { m_app.adjustZoom(-0.1); });
-    connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V), this), &QShortcut::activated, this,
-            [this] { m_ctl.setVirtualCameraEnabled(!m_ctl.output().enabled); });
     connect(new QShortcut(QKeySequence::Save, this), &QShortcut::activated, this, &MainWindow::savePreset);
     connect(new QShortcut(QKeySequence(Qt::Key_Escape), this), &QShortcut::activated, m_background,
             &BackgroundPanel::cancelInteraction);
@@ -743,21 +775,23 @@ void MainWindow::syncCameraList()
         // Keep showing an unplugged camera: it is restored when plugged back in.
         currentIndex = m_cameraEntries.size();
         m_cameraEntries.append(current);
-        m_cameraCombo->addItem(tr("%1 (unplugged)").arg(QString::fromStdString(current.card)),
+        m_cameraCombo->addItem(tr("%1 (disconnected)").arg(QString::fromStdString(current.card)),
                                m_cameraEntries.size() - 1);
     }
+    if (m_cameraCombo->count() > 0)
+        m_cameraCombo->insertSeparator(m_cameraCombo->count());
     cam::CameraSelection test;
     test.testPattern = true;
     if (current.testPattern)
         currentIndex = m_cameraEntries.size();
     m_cameraEntries.append(test);
-    m_cameraCombo->addItem(tr("Test pattern"), m_cameraEntries.size() - 1);
+    m_cameraCombo->addItem(tr("Test Pattern"), m_cameraEntries.size() - 1);
     cam::CameraSelection none;
     if (current.empty())
         currentIndex = m_cameraEntries.size();
     m_cameraEntries.append(none);
-    m_cameraCombo->addItem(tr("No camera"), m_cameraEntries.size() - 1);
-    m_cameraCombo->setCurrentIndex(currentIndex);
+    m_cameraCombo->addItem(tr("None"), m_cameraEntries.size() - 1);
+    m_cameraCombo->setCurrentIndex(m_cameraCombo->findData(currentIndex));
     m_syncing = false;
 }
 
@@ -768,9 +802,9 @@ void MainWindow::syncModes()
     m_modeEntries.clear();
     const auto &active = m_ctl.activeMode();
     m_modeEntries.append(cam::CaptureRequest());
-    QString autoText = tr("Automatic (recommended)");
+    QString autoText = tr("Automatic");
     if (active.width > 0 && m_ctl.captureRequest().automatic)
-        autoText = tr("Automatic — %1×%2, %3 fps").arg(active.width).arg(active.height).arg(fpsText(active.fps));
+        autoText = tr("Automatic (%1×%2 @ %3)").arg(active.width).arg(active.height).arg(fpsText(active.fps));
     m_modeCombo->addItem(autoText, 0);
     int currentIndex = 0;
     const cam::CaptureRequest &req = m_ctl.captureRequest();
@@ -785,7 +819,7 @@ void MainWindow::syncModes()
             if (!req.automatic && req == q)
                 currentIndex = m_modeEntries.size();
             m_modeEntries.append(q);
-            m_modeCombo->addItem(tr("%1×%2, %3 fps (%4)")
+            m_modeCombo->addItem(QStringLiteral("%1×%2 @ %3  %4")
                                      .arg(m.width)
                                      .arg(m.height)
                                      .arg(fpsText(r.fps()))
@@ -795,7 +829,7 @@ void MainWindow::syncModes()
     }
     if (!req.automatic && currentIndex == 0 && m_ctl.modes().empty()) {
         m_modeEntries.append(req);
-        m_modeCombo->addItem(tr("%1×%2, %3 fps").arg(req.width).arg(req.height).arg(fpsText(req.rate.fps())),
+        m_modeCombo->addItem(QStringLiteral("%1×%2 @ %3").arg(req.width).arg(req.height).arg(fpsText(req.rate.fps())),
                              m_modeEntries.size() - 1);
         currentIndex = m_modeEntries.size() - 1;
     }
@@ -822,7 +856,7 @@ void MainWindow::syncFraming()
     m_zoom->setValue(f.zoom);
     if (!m_zoomSlider->isSliderDown())
         m_zoomSlider->setValue(int(std::lround(std::min(f.zoom, 4.0) * 100)));
-    m_zoomLabel->setText(QStringLiteral("%1×").arg(f.zoom, 0, 'f', 1));
+    m_zoomLabel->setText(QStringLiteral("%1%").arg(int(std::lround(f.zoom * 100))));
     m_panX->setValue(f.panX);
     m_panY->setValue(f.panY);
     double rot = std::fmod(f.rotation, 360.0);
@@ -832,12 +866,16 @@ void MainWindow::syncFraming()
     double fine = rot - quarter * 90;
     if (fine > 180)
         fine -= 360;
-    m_rotation->setCurrentData(quarter * 90);
+    m_rotation->setCurrentIndex(quarter);
     m_straighten->setValue(fine);
-    m_mirror->setChecked(f.mirror);
-    m_flip->setChecked(f.flip);
-    m_mirrorButton->setChecked(f.mirror);
-    m_aspect->setCurrentData(int(f.aspect));
+    {
+        QSignalBlocker b1(m_mirror), b2(m_flip), b3(m_mirrorButton), b4(m_flipButton);
+        m_mirror->setChecked(f.mirror);
+        m_flip->setChecked(f.flip);
+        m_mirrorButton->setChecked(f.mirror);
+        m_flipButton->setChecked(f.flip);
+    }
+    m_aspect->setCurrentIndex(std::max(0, m_aspect->findData(int(f.aspect))));
     m_cropL->setValue(f.cropLeft);
     m_cropR->setValue(f.cropRight);
     m_cropT->setValue(f.cropTop);
@@ -849,12 +887,12 @@ void MainWindow::syncOutput()
 {
     m_syncing = true;
     const cam::OutputConfig &o = m_ctl.output();
-    m_outEnabled->setChecked(o.enabled);
     {
-        QSignalBlocker b(m_vcamSwitch);
-        m_vcamSwitch->setChecked(o.enabled);
-        m_vcamSwitch->update();
+        QSignalBlocker b1(m_outEnabled), b2(m_vcamButton);
+        m_outEnabled->setChecked(o.enabled);
+        m_vcamButton->setChecked(o.enabled);
     }
+    m_vcamAction->setChecked(o.enabled);
     if (m_trayVcam)
         m_trayVcam->setChecked(o.enabled);
 
@@ -863,8 +901,7 @@ void MainWindow::syncOutput()
     int devIndex = 0;
     for (const auto &d : m_ctl.loopbackDevices()) {
         const QString path = QString::fromStdString(d.path);
-        m_outDevice->addItem(QString::fromStdString(d.card), path);
-        m_outDevice->setItemData(m_outDevice->count() - 1, path, Qt::ToolTipRole);
+        m_outDevice->addItem(QStringLiteral("%1 (%2)").arg(QString::fromStdString(d.card), path), path);
         if (path.toStdString() == o.devicePath)
             devIndex = m_outDevice->count() - 1;
     }
@@ -888,58 +925,56 @@ void MainWindow::syncOutput()
     m_outFps->setCurrentIndex(fpsIndex);
     m_outFormat->setCurrentIndex(std::max(0, m_outFormat->findData(int(o.pixelFormat))));
 
-    QString state, detail, color = QStringLiteral("#8a93a6");
     const bool noDevice = m_ctl.loopbackDevices().isEmpty();
+    QString detail;
+    QColor led = theme::kMuted;
+    QString button = tr("Start Virtual Camera");
     switch (m_ctl.outputState()) {
     case cam::OutputState::Disabled:
-        state = noDevice ? tr("Not set up") : tr("Off");
-        detail = noDevice ? tr("The virtual camera needs a one-time setup.") : QString();
+        detail = noDevice ? tr("Not set up yet. A one-time setup is needed.") : tr("Off.");
         break;
-    case cam::OutputState::Active: {
-        int w, h;
-        m_ctl.renderSize(w, h);
-        state = tr("On · %1×%2").arg(w).arg(h);
-        detail = m_ctl.outputMessage().isEmpty() ? tr("Active. Choose “CamTune” as the camera in your call app.")
+    case cam::OutputState::Active:
+        detail = m_ctl.outputMessage().isEmpty() ? tr("Running. Select “CamTune” as the camera in your call app.")
                                                  : m_ctl.outputMessage();
-        color = QStringLiteral("#34c77b");
+        led = theme::kSuccess;
+        button = tr("Virtual Camera On");
         break;
-    }
     case cam::OutputState::NoDevice:
-        state = tr("Not set up");
-        detail = tr("The virtual camera needs a one-time setup.");
-        color = QStringLiteral("#ffb454");
+        detail = tr("Not set up yet. A one-time setup is needed.");
+        led = theme::kWarning;
+        button = tr("Virtual Camera: Setup Needed");
         break;
     case cam::OutputState::Error:
-        state = tr("Problem");
         detail = m_ctl.outputMessage();
-        color = QStringLiteral("#ff5d5d");
+        led = theme::kDanger;
+        button = tr("Virtual Camera: Error");
         break;
     }
-    m_vcamState->setText(state);
-    m_vcamState->setStyleSheet(QStringLiteral("color: %1;").arg(color));
+    m_vcamButton->setText(button);
+    m_vcamButton->setIcon(icons::led(led));
     m_outStatus->setText(detail);
-    m_outStatus->setVisible(!detail.isEmpty());
-    m_outStatus->setStyleSheet(QStringLiteral("color: %1;").arg(color));
-    m_setupButton->setVisible(noDevice);
+    m_setupButton->parentWidget()->setVisible(noDevice);
     if (m_tray)
         m_tray->setToolTip(m_ctl.outputState() == cam::OutputState::Active ? tr("CamTune — virtual camera on")
                                                                            : QStringLiteral("CamTune"));
     m_syncing = false;
     updateBanner();
+    updateStatus();
 }
 
 void MainWindow::syncCameraState()
 {
     switch (m_ctl.cameraState()) {
     case cam::CameraState::Streaming:
-        m_preview->setMessage(m_previewPaused ? tr("Preview paused — the virtual camera keeps running") : QString());
+        m_preview->setMessage(m_previewPaused ? tr("Preview paused (Ctrl+P) — the virtual camera keeps running")
+                                              : QString());
         break;
     case cam::CameraState::Opening:
         m_preview->setMessage(tr("Starting camera…"));
         break;
     case cam::CameraState::NoCamera:
         m_preview->clearFrame();
-        m_preview->setMessage(tr("Choose a camera at the top left"));
+        m_preview->setMessage(tr("No camera selected"));
         break;
     default:
         m_preview->clearFrame();
@@ -956,48 +991,34 @@ void MainWindow::syncPresets()
     const auto &list = m_app.presets().presets();
     const QString current = m_app.currentPresetName();
 
-    // Header menu.
+    m_presetCombo->clear();
+    int currentIndex = -1;
+    for (int i = 0; i < list.size(); ++i) {
+        m_presetCombo->addItem(list[i].shortcut ? QStringLiteral("%1\t(Ctrl+%2)").arg(list[i].name).arg(list[i].shortcut)
+                                                : list[i].name);
+        if (list[i].name == current)
+            currentIndex = i;
+    }
+    m_presetCombo->setCurrentIndex(currentIndex); // -1 shows "Custom"
+    // Show the plain name in the closed combo.
+    for (int i = 0; i < list.size(); ++i)
+        m_presetCombo->setItemText(i, list[i].name);
+
     m_presetsMenu->clear();
-    QAction *save = m_presetsMenu->addAction(tr("Save current settings as preset…"));
-    save->setShortcut(QKeySequence::Save);
-    save->setShortcutContext(Qt::WidgetShortcut); // the window-wide QShortcut handles the key
-    connect(save, &QAction::triggered, this, &MainWindow::savePreset);
+    m_presetsMenu->addAction(icons::get(icons::Name::Save), tr("&Save Current Settings…"), this, &MainWindow::savePreset)
+        ->setShortcut(QKeySequence::Save);
+    m_presetsMenu->actions().last()->setShortcutContext(Qt::WidgetShortcut); // handled by the QShortcut
+    m_presetsMenu->addAction(icons::get(icons::Name::Manage), tr("&Manage Presets…"), this, &MainWindow::managePresets);
     m_presetsMenu->addSeparator();
     for (int i = 0; i < list.size(); ++i) {
         QAction *a = m_presetsMenu->addAction(list[i].name);
         a->setCheckable(true);
         a->setChecked(list[i].name == current);
-        if (list[i].shortcut) {
+        if (list[i].shortcut)
             a->setShortcut(QKeySequence(Qt::CTRL | Qt::Key(Qt::Key_0 + list[i].shortcut)));
-            a->setShortcutContext(Qt::WidgetShortcut);
-        }
         connect(a, &QAction::triggered, this, [this, i] { m_app.applyPresetIndex(i); });
     }
-    m_presetsMenu->addSeparator();
-    connect(m_presetsMenu->addAction(tr("Manage presets…")), &QAction::triggered, this, &MainWindow::managePresets);
 
-    // One-click chips under the preview.
-    while (QLayoutItem *item = m_chipLayout->takeAt(0)) {
-        delete item->widget();
-        delete item;
-    }
-    const int shown = std::min<int>(list.size(), 5);
-    for (int i = 0; i < shown; ++i) {
-        auto *chip = new QPushButton(list[i].name);
-        chip->setObjectName(QStringLiteral("Chip"));
-        chip->setCheckable(true);
-        chip->setChecked(list[i].name == current);
-        chip->setToolTip(list[i].shortcut ? tr("Apply preset (Ctrl+%1)").arg(list[i].shortcut) : tr("Apply preset"));
-        connect(chip, &QPushButton::clicked, this, [this, i] { m_app.applyPresetIndex(i); });
-        m_chipLayout->addWidget(chip);
-    }
-    auto *add = new QPushButton(QStringLiteral("+"));
-    add->setObjectName(QStringLiteral("Chip"));
-    add->setToolTip(tr("Save the current settings as a preset (Ctrl+S)"));
-    connect(add, &QPushButton::clicked, this, &MainWindow::savePreset);
-    m_chipLayout->addWidget(add);
-
-    // Tray.
     if (m_trayPresets) {
         m_trayPresets->clear();
         for (int i = 0; i < list.size(); ++i)
@@ -1023,7 +1044,7 @@ void MainWindow::updateBanner()
     }
     if (m_ctl.output().enabled && m_ctl.outputState() == cam::OutputState::NoDevice) {
         text += (text.isEmpty() ? QString() : QStringLiteral("\n")) +
-                tr("The virtual camera is not set up yet — open the Output tab and click “Set up virtual camera”.");
+                tr("The virtual camera is not set up yet. Use Tools → Set Up Virtual Camera.");
     } else if (m_ctl.output().enabled && m_ctl.outputState() == cam::OutputState::Error) {
         text += (text.isEmpty() ? QString() : QStringLiteral("\n")) + m_ctl.outputMessage();
         level = QStringLiteral("error");
@@ -1042,49 +1063,50 @@ void MainWindow::updateBanner()
 void MainWindow::updateStatus()
 {
     const cam::EngineStats s = m_ctl.stats();
-    QString text, color;
+    QString text;
+    QColor led = theme::kMuted;
     const QString name = QString::fromStdString(m_ctl.camera().displayName());
+    const bool live = m_ctl.cameraState() == cam::CameraState::Streaming;
     switch (m_ctl.cameraState()) {
-    case cam::CameraState::Streaming: {
-        const auto &m = m_ctl.activeMode();
-        color = QStringLiteral("#34c77b");
-        text = tr("Live · %1 · %2×%3 · %4 fps").arg(name).arg(m.width).arg(m.height).arg(fpsText(s.captureFps));
-        if (s.overloaded)
-            text += tr(" · computer is busy, quality reduced");
+    case cam::CameraState::Streaming:
+        led = theme::kSuccess;
+        text = s.overloaded ? tr("%1 — system busy, quality reduced").arg(name) : name;
         break;
-    }
     case cam::CameraState::Opening:
-        color = QStringLiteral("#ffb454");
+        led = theme::kWarning;
         text = tr("Starting %1…").arg(name);
         break;
     case cam::CameraState::Waiting:
-        color = QStringLiteral("#ffb454");
-        text = tr("%1 is unplugged — waiting for it").arg(name);
+        led = theme::kWarning;
+        text = tr("%1 disconnected — waiting").arg(name);
         break;
     case cam::CameraState::Busy:
     case cam::CameraState::Error:
-        color = QStringLiteral("#ff5d5d");
+        led = theme::kDanger;
         text = tr("Camera unavailable — retrying");
         break;
     case cam::CameraState::Suspended:
-        color = QStringLiteral("#8a93a6");
-        text = tr("Paused while the computer sleeps");
+        text = tr("Paused for system sleep");
         break;
     case cam::CameraState::NoCamera:
-        color = QStringLiteral("#8a93a6");
-        text = tr("No camera selected");
+        text = tr("No camera");
         break;
     }
-    m_statusDot->setStyleSheet(QStringLiteral("color: %1;").arg(color));
+    m_statusLed->setPixmap(icons::led(led).pixmap(12, 12));
     m_statusText->setText(text);
-    m_perfText->setVisible(m_showPerformance);
-    if (m_showPerformance)
-        m_perfText->setText(tr("processing %1 ms · delay %2 ms%3")
-                                .arg(s.processMs, 0, 'f', 1)
-                                .arg(s.latencyMs, 0, 'f', 0)
-                                .arg(m_ctl.outputState() == cam::OutputState::Active
-                                         ? tr(" · sending %1 fps").arg(fpsText(s.outputFps))
-                                         : QString()));
+
+    const auto &m = m_ctl.activeMode();
+    m_captureInfo->setText(live ? tr("Input %1×%2 · %3 fps").arg(m.width).arg(m.height).arg(s.captureFps, 0, 'f', 1)
+                                : tr("Input —"));
+    if (m_ctl.outputState() == cam::OutputState::Active) {
+        int w, h;
+        m_ctl.renderSize(w, h);
+        m_outputInfo->setText(tr("Virtual camera %1×%2 · %3 fps").arg(w).arg(h).arg(s.outputFps, 0, 'f', 1));
+    } else {
+        m_outputInfo->setText(tr("Virtual camera off"));
+    }
+    m_perfInfo->setText(live ? tr("Process %1 ms · Latency %2 ms").arg(s.processMs, 0, 'f', 1).arg(s.latencyMs, 0, 'f', 0)
+                             : QString());
 }
 
 void MainWindow::updatePreviewWanted()
@@ -1092,7 +1114,7 @@ void MainWindow::updatePreviewWanted()
     const bool visible = isVisible() && !isMinimized();
     m_ctl.setPreviewWanted(visible && !m_previewPaused);
     if (m_previewPaused)
-        m_preview->setMessage(tr("Preview paused — the virtual camera keeps running"));
+        m_preview->setMessage(tr("Preview paused (Ctrl+P) — the virtual camera keeps running"));
     else if (m_ctl.cameraState() == cam::CameraState::Streaming)
         m_preview->setMessage(QString());
 }
@@ -1122,10 +1144,10 @@ void MainWindow::pushFraming(int transitionMs)
     f.zoom = m_zoom->value();
     f.panX = m_panX->value();
     f.panY = m_panY->value();
-    f.rotation = std::max(0, m_rotation->currentData()) + m_straighten->value();
+    f.rotation = m_rotation->currentData().toInt() + m_straighten->value();
     f.mirror = m_mirror->isChecked();
     f.flip = m_flip->isChecked();
-    f.aspect = cam::AspectMode(std::max(0, m_aspect->currentData()));
+    f.aspect = cam::AspectMode(m_aspect->currentData().toInt());
     f.cropLeft = m_cropL->value();
     f.cropRight = m_cropR->value();
     f.cropTop = m_cropT->value();
@@ -1181,20 +1203,87 @@ void MainWindow::panBy(double dxOut, double dyOut)
 
 void MainWindow::savePreset()
 {
-    PresetsPanel panel(m_app);
+    // Hidden child so the name dialog is centred on the main window.
+    PresetsPanel panel(m_app, this);
+    panel.hide();
     panel.saveNew();
 }
 
 void MainWindow::managePresets()
 {
     QDialog dlg(this);
-    dlg.setWindowTitle(tr("Presets"));
-    dlg.resize(420, 460);
+    dlg.setWindowTitle(tr("Manage Presets"));
+    dlg.resize(440, 460);
     auto *v = new QVBoxLayout(&dlg);
     v->addWidget(new PresetsPanel(m_app));
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close);
     connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
     v->addWidget(buttons);
+    dlg.exec();
+}
+
+void MainWindow::showPreferences()
+{
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("Preferences"));
+    dlg.setMinimumWidth(460);
+    auto *v = new QVBoxLayout(&dlg);
+
+    auto *startup = new QGroupBox(tr("Startup"));
+    auto *sl = new QVBoxLayout(startup);
+    auto *login = new QCheckBox(tr("Start CamTune when I log in"));
+    login->setChecked(app::autostart::isEnabled());
+    auto *hidden = new QCheckBox(tr("Start hidden in the system tray"));
+    hidden->setChecked(m_app.settings().startMinimized());
+    sl->addWidget(login);
+    sl->addWidget(hidden);
+    v->addWidget(startup);
+
+    auto *behaviour = new QGroupBox(tr("Behaviour"));
+    auto *bl = new QVBoxLayout(behaviour);
+    auto *tray = new QCheckBox(tr("Keep running in the tray when the window is closed"));
+    tray->setChecked(m_app.settings().closeToTray());
+    auto *global = new QCheckBox(tr("Global shortcuts — Ctrl+Alt+1…9 apply presets from any app"));
+    global->setChecked(m_app.settings().globalShortcuts());
+    auto *globalStatus = hintLabel(m_app.settings().globalShortcuts() ? m_app.globalShortcuts()->statusText()
+                                                                      : QString());
+    globalStatus->setVisible(!globalStatus->text().isEmpty());
+    auto *form = new QFormLayout;
+    auto *transition = new QDoubleSpinBox;
+    transition->setRange(0, 3);
+    transition->setSingleStep(0.05);
+    transition->setDecimals(2);
+    transition->setSuffix(tr(" s"));
+    transition->setValue(m_app.settings().presetTransitionMs() / 1000.0);
+    form->addRow(tr("Preset transition:"), transition);
+    bl->addWidget(tray);
+    bl->addWidget(global);
+    bl->addWidget(globalStatus);
+    bl->addLayout(form);
+    v->addWidget(behaviour);
+
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    v->addWidget(buttons);
+
+    connect(login, &QCheckBox::toggled, &dlg, [this, login](bool on) {
+        QString err;
+        if (!app::autostart::setEnabled(on, &err)) {
+            QMessageBox::warning(this, tr("Preferences"), err);
+            QSignalBlocker b(login);
+            login->setChecked(!on);
+        }
+    });
+    connect(hidden, &QCheckBox::toggled, &dlg, [this](bool on) { m_app.settings().setStartMinimized(on); });
+    connect(tray, &QCheckBox::toggled, &dlg, [this](bool on) { m_app.settings().setCloseToTray(on); });
+    connect(global, &QCheckBox::toggled, &dlg, [this](bool on) { m_app.setGlobalShortcutsEnabled(on); });
+    connect(m_app.globalShortcuts(), &app::GlobalShortcuts::statusChanged, globalStatus, [this, globalStatus] {
+        const QString s = m_app.settings().globalShortcuts() ? m_app.globalShortcuts()->statusText() : QString();
+        globalStatus->setText(s);
+        globalStatus->setVisible(!s.isEmpty());
+    });
+    connect(transition, qOverload<double>(&QDoubleSpinBox::valueChanged), &dlg,
+            [this](double s) { m_app.settings().setPresetTransitionMs(int(s * 1000)); });
     dlg.exec();
 }
 
@@ -1278,26 +1367,26 @@ void MainWindow::runVirtualCameraSetup()
 {
     const QString helper = app::setupHelperPath();
     QDialog dlg(this);
-    dlg.setWindowTitle(tr("Set up the virtual camera"));
+    dlg.setWindowTitle(tr("Set Up Virtual Camera"));
     dlg.resize(620, 440);
     auto *v = new QVBoxLayout(&dlg);
     auto *intro = new QLabel(
-        tr("<p>CamTune's virtual camera uses the <b>v4l2loopback</b> kernel module. Setup loads it with settings "
-           "that work with Zoom, Teams, Meet, Discord and browsers, names it “CamTune”, and loads it at every "
-           "start. You will be asked for your password.</p>"
-           "<p>If the module is not installed yet, choose <b>Install &amp; set up</b>. "
-           "Fedora needs the free RPM Fusion repository enabled first. With Secure Boot, the installer may ask "
-           "you to enroll a key on the next reboot.</p>"));
+        tr("<p>The virtual camera uses the <b>v4l2loopback</b> kernel module. Setup loads it with settings that "
+           "work with Zoom, Teams, Meet, Discord and browsers, names it “CamTune”, and loads it at every boot. "
+           "You will be asked for your password.</p>"
+           "<p>If the module is not installed yet, choose <b>Install &amp; Set Up</b>. Fedora needs the free "
+           "RPM Fusion repository enabled first. With Secure Boot, the installer may ask you to enroll a key on "
+           "the next reboot.</p>"));
     intro->setWordWrap(true);
     intro->setTextFormat(Qt::RichText);
     v->addWidget(intro);
     auto *log = new QPlainTextEdit;
     log->setReadOnly(true);
-    log->setPlaceholderText(tr("Progress will appear here."));
+    log->setPlaceholderText(tr("Output will appear here."));
     v->addWidget(log, 1);
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close);
-    auto *install = buttons->addButton(tr("Install && set up"), QDialogButtonBox::ActionRole);
-    auto *run = buttons->addButton(tr("Set up"), QDialogButtonBox::ActionRole);
+    auto *install = buttons->addButton(tr("Install && Set Up"), QDialogButtonBox::ActionRole);
+    auto *run = buttons->addButton(tr("Set Up"), QDialogButtonBox::ActionRole);
     run->setObjectName(QStringLiteral("Primary"));
     v->addWidget(buttons);
     connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
@@ -1325,7 +1414,7 @@ void MainWindow::runVirtualCameraSetup()
         } else if (code == 126 || code == 127) {
             log->appendPlainText(tr("\nCancelled, or the password prompt (pkexec) is not available."));
         } else if (code == 2) {
-            log->appendPlainText(tr("\nThe module is not installed. Click “Install & set up”."));
+            log->appendPlainText(tr("\nThe module is not installed. Click “Install & Set Up”."));
         } else {
             log->appendPlainText(tr("\nSetup failed (code %1).").arg(code));
         }
@@ -1349,7 +1438,7 @@ void MainWindow::runVirtualCameraSetup()
 void MainWindow::showAutomationHelp()
 {
     QMessageBox box(this);
-    box.setWindowTitle(tr("Command line & automation"));
+    box.setWindowTitle(tr("Command Line & Automation"));
     box.setTextFormat(Qt::RichText);
     box.setText(tr("<p>Control a running CamTune from scripts, hotkey tools or a Stream Deck:</p>"
                    "<pre>camtune --preset 2            # by number or name\n"
@@ -1360,9 +1449,8 @@ void MainWindow::showAutomationHelp()
                    "camtune --reset-framing\n"
                    "camtune --virtual-camera on|off|toggle\n"
                    "camtune --list-presets | --status | --show | --quit</pre>"
-                   "<p><b>Shortcuts while in a call:</b> turn on <i>Shortcuts from any app</i> on the Output tab, "
-                   "or bind keys to the commands above in your desktop's keyboard settings (works on Wayland and "
-                   "X11).</p>"
+                   "<p><b>Shortcuts during a call:</b> enable global shortcuts in File → Preferences, or bind "
+                   "keys to the commands above in your desktop's keyboard settings (Wayland and X11).</p>"
                    "<p><b>D-Bus:</b> <code>io.github.CamTune</code>, object <code>/io/github/CamTune</code>, "
                    "interface <code>io.github.CamTune1</code>.</p>"));
     box.exec();
@@ -1375,7 +1463,7 @@ void MainWindow::showAbout()
     box.setIconPixmap(appIcon().pixmap(64, 64));
     box.setTextFormat(Qt::RichText);
     box.setText(tr("<h3>CamTune %1</h3>"
-                   "<p>Webcam controls, framing, background blur and a low-latency virtual camera for "
+                   "<p>Webcam controls, framing, background effects and a low-latency virtual camera for "
                    "video calls. Everything runs on this computer.</p>"
                    "<p>License: GPL-3.0-or-later. Person detection uses Google's MediaPipe selfie "
                    "segmentation model (Apache-2.0).</p>")

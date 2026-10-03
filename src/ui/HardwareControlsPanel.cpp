@@ -4,6 +4,7 @@
 #include "Widgets.h"
 
 #include <QCheckBox>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -46,14 +47,14 @@ QString friendlyName(const ControlInfo &c)
     switch (c.id) {
     case V4L2_CID_EXPOSURE_AUTO: return QObject::tr("Exposure");
     case V4L2_CID_EXPOSURE_ABSOLUTE: return QObject::tr("Exposure time");
-    case V4L2_CID_EXPOSURE_AUTO_PRIORITY: return QObject::tr("Lower frame rate in dim light");
+    case V4L2_CID_EXPOSURE_AUTO_PRIORITY: return QObject::tr("Low-light FPS drop");
     case V4L2_CID_FOCUS_AUTO: return QObject::tr("Autofocus");
     case V4L2_CID_FOCUS_ABSOLUTE: return QObject::tr("Focus");
-    case V4L2_CID_AUTO_WHITE_BALANCE: return QObject::tr("Auto white balance");
-    case V4L2_CID_WHITE_BALANCE_TEMPERATURE: return QObject::tr("White balance (K)");
+    case V4L2_CID_AUTO_WHITE_BALANCE: return QObject::tr("Auto WB");
+    case V4L2_CID_WHITE_BALANCE_TEMPERATURE: return QObject::tr("White balance");
     case V4L2_CID_AUTOGAIN: return QObject::tr("Auto gain");
-    case V4L2_CID_POWER_LINE_FREQUENCY: return QObject::tr("Anti-flicker (mains)");
-    case V4L2_CID_BACKLIGHT_COMPENSATION: return QObject::tr("Backlight compensation");
+    case V4L2_CID_POWER_LINE_FREQUENCY: return QObject::tr("Anti-flicker");
+    case V4L2_CID_BACKLIGHT_COMPENSATION: return QObject::tr("Backlight comp.");
     case V4L2_CID_ZOOM_ABSOLUTE: return QObject::tr("Optical zoom");
     default: return QString::fromStdString(c.name);
     }
@@ -65,8 +66,8 @@ HardwareControlsPanel::HardwareControlsPanel(QWidget *parent) : QWidget(parent)
 {
     m_layout = new QVBoxLayout(this);
     m_layout->setContentsMargins(0, 0, 0, 0);
-    m_empty = new QLabel(tr("This camera has no adjustable settings, or none is connected."));
-    m_empty->setObjectName(QStringLiteral("Muted"));
+    m_empty = hintLabel(tr("No camera settings available. Connect a camera to adjust exposure, focus and white balance."));
+    m_empty->setContentsMargins(10, 8, 10, 8);
     m_empty->setWordWrap(true);
     m_layout->addWidget(m_empty);
 }
@@ -116,22 +117,25 @@ void HardwareControlsPanel::rebuild(const std::vector<ControlInfo> &controls)
     std::stable_sort(camera.begin(), camera.end(), byOrder);
     std::stable_sort(image.begin(), image.end(), byOrder);
 
-    auto addGroup = [&](const QString &title, const std::vector<ControlInfo> &list, bool collapsible) {
+    auto addGroup = [&](const QString &title, const std::vector<ControlInfo> &list, bool collapsed) {
         if (list.empty())
             return;
-        auto *sec = new Section(title, collapsible);
+        auto *sec = new Section(title, !collapsed);
         for (const auto &c : list)
             addControl(sec->contentLayout(), c);
         v->addWidget(sec);
     };
-    addGroup(tr("Exposure, focus & white balance"), camera, false);
-    addGroup(tr("Image (set in the camera)"), image, false);
-    addGroup(tr("More camera settings"), advanced, true);
+    addGroup(tr("Exposure, Focus & White Balance"), camera, false);
+    addGroup(tr("Image Processing (in camera)"), image, false);
+    addGroup(tr("Advanced"), advanced, true);
 
-    auto *reset = new QPushButton(tr("Reset camera settings"));
+    auto *reset = new QPushButton(tr("Reset Camera to Defaults"));
     connect(reset, &QPushButton::clicked, this, &HardwareControlsPanel::resetRequested);
-    v->addSpacing(6);
-    v->addWidget(reset);
+    auto *row = new QHBoxLayout;
+    row->setContentsMargins(10, 8, 6, 8);
+    row->addStretch(1);
+    row->addWidget(reset);
+    v->addLayout(row);
     m_layout->addWidget(m_content);
 }
 
@@ -176,22 +180,18 @@ void HardwareControlsPanel::addControl(QVBoxLayout *layout, const ControlInfo &c
         break;
     }
     case ControlInfo::Type::Boolean:
-        e.toggle = new ToggleRow(name);
-        layout->addWidget(e.toggle);
-        connect(e.toggle, &ToggleRow::toggled, this, [this, id](bool on) { Q_EMIT controlChanged(id, on ? 1 : 0); });
+        e.toggle = new QCheckBox;
+        e.row = propertyRow(name, e.toggle);
+        layout->addWidget(e.row);
+        connect(e.toggle, &QCheckBox::toggled, this, [this, id](bool on) { Q_EMIT controlChanged(id, on ? 1 : 0); });
         break;
     case ControlInfo::Type::Menu:
     case ControlInfo::Type::IntegerMenu: {
-        auto *row = new QWidget;
-        auto *h = new QHBoxLayout(row);
-        h->setContentsMargins(0, 2, 0, 2);
-        e.label = new QLabel(name);
         e.combo = new QComboBox;
         for (const auto &m : c.menu)
             e.combo->addItem(friendlyMenuItem(c.id, QString::fromStdString(m.second)), qint64(m.first));
-        h->addWidget(e.label, 1);
-        h->addWidget(e.combo);
-        layout->addWidget(row);
+        e.row = propertyRow(name, e.combo);
+        layout->addWidget(e.row);
         connect(e.combo, qOverload<int>(&QComboBox::activated), this, [this, id, combo = e.combo](int idx) {
             Q_EMIT controlChanged(id, combo->itemData(idx).toLongLong());
         });
@@ -199,7 +199,8 @@ void HardwareControlsPanel::addControl(QVBoxLayout *layout, const ControlInfo &c
     }
     case ControlInfo::Type::Button:
         e.button = new QPushButton(name);
-        layout->addWidget(e.button);
+        e.row = propertyRow(QString(), e.button);
+        layout->addWidget(e.row);
         connect(e.button, &QPushButton::clicked, this, [this, id] { Q_EMIT controlChanged(id, 1); });
         break;
     }
@@ -219,20 +220,19 @@ void HardwareControlsPanel::updateEntry(Entry &e, const ControlInfo &c)
         e.slider->setHint(tip);
     }
     if (e.toggle) {
+        QSignalBlocker b(e.toggle);
         e.toggle->setChecked(c.value != 0);
-        e.toggle->setEnabled(enabled);
-        e.toggle->setToolTip(tip);
     }
     if (e.combo) {
         QSignalBlocker b(e.combo);
         int idx = e.combo->findData(qint64(c.value));
         if (idx >= 0)
             e.combo->setCurrentIndex(idx);
-        e.combo->setEnabled(enabled);
-        e.label->setEnabled(enabled);
     }
-    if (e.button)
-        e.button->setEnabled(enabled);
+    if (e.row) {
+        e.row->setEnabled(enabled);
+        e.row->setToolTip(tip);
+    }
 }
 
 } // namespace ui

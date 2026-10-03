@@ -4,20 +4,20 @@
 #include "pipeline/Types.h"
 
 #include <QMainWindow>
-#include <QPointer>
 #include <QTimer>
 #include <QVector>
 
 class QAction;
+class QButtonGroup;
+class QCheckBox;
 class QComboBox;
-class QHBoxLayout;
 class QLabel;
 class QMenu;
 class QPushButton;
 class QSlider;
 class QSplitter;
+class QStackedWidget;
 class QSystemTrayIcon;
-class QTabWidget;
 class QToolButton;
 
 namespace app {
@@ -30,11 +30,11 @@ namespace ui {
 class BackgroundPanel;
 class HardwareControlsPanel;
 class PreviewWidget;
-class SegmentedControl;
 class SliderRow;
-class ToggleRow;
-class ToggleSwitch;
 
+// Layout follows desktop studio apps: menu bar, a toolbar for source / preset
+// / output, the viewer with its own tool row, an inspector with a vertical
+// page rail on the right, and a status bar with live figures.
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
@@ -53,14 +53,15 @@ protected:
     void hideEvent(QHideEvent *e) override;
 
 private:
-    QWidget *buildHeader();
-    QWidget *buildPreviewColumn();
-    QWidget *buildSidebar();
-    QWidget *buildPictureTab();
-    QWidget *buildFramingTab();
-    QWidget *buildCameraTab();
-    QWidget *buildOutputTab();
-    QMenu *buildMainMenu();
+    void buildMenus();
+    void buildToolBar();
+    QWidget *buildViewer();
+    QWidget *buildInspector();
+    QWidget *buildPicturePage();
+    QWidget *buildFramingPage();
+    QWidget *buildCameraPage();
+    QWidget *buildOutputPage();
+    void buildStatusBar();
     void buildTray();
     void buildShortcuts();
 
@@ -81,6 +82,7 @@ private:
     void panBy(double dxOut, double dyOut);
     void savePreset();
     void managePresets();
+    void showPreferences();
     void runVirtualCameraSetup();
     void showAutomationHelp();
     void showAbout();
@@ -90,30 +92,31 @@ private:
     bool m_quitting = false;
     bool m_syncing = false;
     bool m_previewPaused = false;
-    bool m_showPerformance = false;
 
-    // Header
+    // Toolbar
     QComboBox *m_cameraCombo = nullptr;
     QVector<cam::CameraSelection> m_cameraEntries;
-    ToggleSwitch *m_vcamSwitch = nullptr;
-    QLabel *m_vcamState = nullptr;
-    QToolButton *m_presetsButton = nullptr;
-    QMenu *m_presetsMenu = nullptr;
+    QComboBox *m_presetCombo = nullptr;
+    QToolButton *m_vcamButton = nullptr;
 
-    // Preview column
+    // Menus
+    QMenu *m_presetsMenu = nullptr;
+    QAction *m_pauseAction = nullptr;
+    QAction *m_vcamAction = nullptr;
+
+    // Viewer
     PreviewWidget *m_preview = nullptr;
     QLabel *m_banner = nullptr;
     QSlider *m_zoomSlider = nullptr;
     QLabel *m_zoomLabel = nullptr;
-    QPushButton *m_mirrorButton = nullptr;
-    QHBoxLayout *m_chipLayout = nullptr;
-    QLabel *m_statusDot = nullptr;
-    QLabel *m_statusText = nullptr;
-    QLabel *m_perfText = nullptr;
+    QToolButton *m_mirrorButton = nullptr;
+    QToolButton *m_flipButton = nullptr;
 
-    // Sidebar
-    QTabWidget *m_tabs = nullptr;
+    // Inspector
     QSplitter *m_splitter = nullptr;
+    QStackedWidget *m_pages = nullptr;
+    QButtonGroup *m_rail = nullptr;
+    QLabel *m_pageTitle = nullptr;
     HardwareControlsPanel *m_hwPanel = nullptr;
     BackgroundPanel *m_background = nullptr;
     QComboBox *m_modeCombo = nullptr;
@@ -122,12 +125,12 @@ private:
     SliderRow *m_brightness, *m_contrast, *m_saturation, *m_gamma, *m_sharpness, *m_warmth, *m_tint;
     SliderRow *m_zoom, *m_panX, *m_panY, *m_straighten;
     SliderRow *m_cropL, *m_cropT, *m_cropR, *m_cropB;
-    SegmentedControl *m_rotation = nullptr;
-    SegmentedControl *m_aspect = nullptr;
-    ToggleRow *m_mirror = nullptr;
-    ToggleRow *m_flip = nullptr;
+    QComboBox *m_rotation = nullptr;
+    QComboBox *m_aspect = nullptr;
+    QCheckBox *m_mirror = nullptr;
+    QCheckBox *m_flip = nullptr;
 
-    ToggleRow *m_outEnabled = nullptr;
+    QCheckBox *m_outEnabled = nullptr;
     QLabel *m_outStatus = nullptr;
     QPushButton *m_setupButton = nullptr;
     QComboBox *m_outResolution = nullptr;
@@ -135,13 +138,19 @@ private:
     QComboBox *m_outDevice = nullptr;
     QComboBox *m_outFormat = nullptr;
 
-    // Tray & menus
+    // Status bar
+    QLabel *m_statusLed = nullptr;
+    QLabel *m_statusText = nullptr;
+    QLabel *m_captureInfo = nullptr;
+    QLabel *m_outputInfo = nullptr;
+    QLabel *m_perfInfo = nullptr;
+
+    // Tray
     QSystemTrayIcon *m_tray = nullptr;
     QMenu *m_trayMenu = nullptr;
     QMenu *m_trayPresets = nullptr;
     QAction *m_trayVcam = nullptr;
     QAction *m_trayShow = nullptr;
-    QAction *m_pauseAction = nullptr;
 
     QTimer m_statsTimer;
     QString m_controlErrorText;

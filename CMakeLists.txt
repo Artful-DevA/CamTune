@@ -91,6 +91,7 @@ if(CAMTUNE_BUILD_GUI)
     src/ui/PresetsPanel.cpp
     src/ui/BackgroundPanel.cpp
     src/ui/Theme.cpp
+    src/ui/Icons.cpp
     resources/resources.qrc
   )
   set_target_properties(camtune PROPERTIES AUTORCC ON)
