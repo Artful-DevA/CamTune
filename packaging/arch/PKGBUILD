@@ -1,0 +1,31 @@
+# Maintainer: Dev-Png497 <246381290+Dev-Png497@users.noreply.github.com>
+pkgname=camtune
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Webcam controls and low-latency virtual camera for video calls"
+arch=('x86_64' 'aarch64')
+url="https://github.com/Dev-Png497/LinuxCameraAdjust"
+license=('GPL-3.0-or-later')
+depends=('qt6-base' 'libjpeg-turbo' 'gcc-libs' 'glibc' 'hicolor-icon-theme')
+makedepends=('cmake' 'git')
+optdepends=('v4l2loopback-dkms: virtual camera output'
+            'polkit: one-click virtual camera setup'
+            'qt6-wayland: native Wayland window')
+source=("$pkgname::git+$url.git#tag=v$pkgver")
+sha256sums=('SKIP')
+
+build() {
+  cmake -S "$pkgname" -B build \
+    -DCMAKE_BUILD_TYPE=None \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DCMAKE_INSTALL_LIBEXECDIR=lib/camtune
+  cmake --build build
+}
+
+check() {
+  ctest --test-dir build --output-on-failure -E soak
+}
+
+package() {
+  DESTDIR="$pkgdir" cmake --install build
+}

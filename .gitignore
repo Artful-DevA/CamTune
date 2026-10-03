@@ -3,3 +3,4 @@
 *.user
 .cache/
 compile_commands.json
+/dist/

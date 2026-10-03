@@ -108,18 +108,42 @@ void migrateLegacyConfig()
 QString setupHelperPath()
 {
     const QString name = QStringLiteral("camtune-setup-v4l2loopback");
+    const QString appDir = QCoreApplication::applicationDirPath();
     const QStringList candidates = {
         QStringLiteral(CAMTUNE_LIBEXECDIR "/") + name,
         QStringLiteral("/usr/libexec/") + name,
         QStringLiteral("/usr/lib/camtune/") + name,
+        // Bundled next to the binary (AppImage: usr/bin + usr/libexec).
+        appDir + QStringLiteral("/../libexec/") + name,
         // Running from a build directory inside the source tree.
-        QCoreApplication::applicationDirPath() + QStringLiteral("/../scripts/") + name,
-        QCoreApplication::applicationDirPath() + QStringLiteral("/scripts/") + name,
+        appDir + QStringLiteral("/../scripts/") + name,
+        appDir + QStringLiteral("/scripts/") + name,
     };
-    for (const QString &c : candidates)
-        if (QFileInfo(c).isExecutable())
-            return QFileInfo(c).canonicalFilePath();
-    return {};
+    QString found;
+    for (const QString &c : candidates) {
+        if (QFileInfo(c).isExecutable()) {
+            found = QFileInfo(c).canonicalFilePath();
+            break;
+        }
+    }
+    if (found.isEmpty())
+        return {};
+
+    // An AppImage is a FUSE mount that root cannot read, so pkexec could not
+    // start the helper from there. Hand it a private copy instead.
+    const QString appImageDir = qEnvironmentVariable("APPDIR");
+    if (!appImageDir.isEmpty() && found.startsWith(QDir(appImageDir).canonicalPath() + QLatin1Char('/'))) {
+        QString runtime = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+        if (runtime.isEmpty())
+            runtime = QDir::tempPath();
+        const QString copy = runtime + QLatin1Char('/') + name;
+        QFile::remove(copy);
+        if (!QFile::copy(found, copy))
+            return {};
+        QFile::setPermissions(copy, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
+        return copy;
+    }
+    return found;
 }
 
 } // namespace app

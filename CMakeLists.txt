@@ -137,3 +137,47 @@ if(CAMTUNE_BUILD_TESTS)
   add_executable(camcore_bench tests/bench.cpp)
   target_link_libraries(camcore_bench PRIVATE camcore)
 endif()
+
+# ---------------------------------------------------------------------------
+# Packages: cpack -G DEB / cpack -G RPM from a build directory configured with
+# -DCMAKE_INSTALL_PREFIX=/usr. Build on the oldest release of each distro you
+# want to support; dependencies are detected from the linked libraries.
+# ---------------------------------------------------------------------------
+set(CPACK_PACKAGE_NAME camtune)
+set(CPACK_PACKAGE_VENDOR "CamTune")
+set(CPACK_PACKAGE_CONTACT "Dev-Png497 <246381290+Dev-Png497@users.noreply.github.com>")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/Dev-Png497/LinuxCameraAdjust")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Webcam controls and low-latency virtual camera for video calls")
+set(CPACK_PACKAGE_DESCRIPTION
+  "CamTune adjusts your webcam (exposure, focus, white balance, color, zoom and\nframing, background blur) and sends the result to a v4l2loopback virtual\ncamera that Zoom, Meet, Teams, Discord and OBS can use. Everything runs locally.")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+set(CPACK_STRIP_FILES ON)
+set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
+
+# Debian / Ubuntu
+set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+set(CPACK_DEBIAN_PACKAGE_SECTION video)
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "v4l2loopback-dkms, pkexec | policykit-1, qt6-wayland")
+# Debian continuation lines start with a space.
+string(REPLACE "\n" "\n " _camtune_deb_desc "${CPACK_PACKAGE_DESCRIPTION}")
+set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "${CPACK_PACKAGE_DESCRIPTION_SUMMARY}\n ${_camtune_deb_desc}")
+
+# Fedora / openSUSE
+set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
+set(CPACK_RPM_PACKAGE_LICENSE "GPL-3.0-or-later")
+set(CPACK_RPM_PACKAGE_GROUP "Applications/Multimedia")
+set(CPACK_RPM_PACKAGE_AUTOREQ ON)
+# The polkit policy names the helper's absolute path.
+set(CPACK_RPM_PACKAGE_RELOCATABLE OFF)
+set(CPACK_RPM_PACKAGE_SUGGESTS "v4l2loopback, polkit, qt6-qtwayland")
+set(CPACK_RPM_PACKAGE_DESCRIPTION "${CPACK_PACKAGE_DESCRIPTION}")
+set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
+  /usr/share/applications /usr/share/metainfo /usr/share/polkit-1 /usr/share/polkit-1/actions
+  /usr/share/icons /usr/share/icons/hicolor /usr/libexec)
+foreach(size 16 22 24 32 48 64 128 256 512)
+  list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
+    /usr/share/icons/hicolor/${size}x${size} /usr/share/icons/hicolor/${size}x${size}/apps)
+endforeach()
+
+include(CPack)

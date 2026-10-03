@@ -1,0 +1,133 @@
+name: Packages
+
+# Builds installable packages for each supported distribution, installs each
+# one into a clean container to check it, and attaches them all to a GitHub
+# Release when a version tag (v0.1.0, …) is pushed. Run it by hand from the
+# Actions tab to get the packages as downloadable artifacts without a release.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deb:
+    name: ${{ matrix.image }} (.deb)
+    runs-on: ubuntu-24.04
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Linux Mint 21 / 22 use the Ubuntu 22.04 / 24.04 packages.
+        image: ['ubuntu:22.04', 'ubuntu:24.04', 'ubuntu:26.04', 'debian:12', 'debian:13']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: packaging/build-package.sh
+      - name: Install and run
+        run: |
+          apt-get install -y ./dist/*.deb
+          QT_QPA_PLATFORM=offscreen camtune --help
+          test -x /usr/libexec/camtune-setup-v4l2loopback
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb-${{ strategy.job-index }}
+          path: dist/*.deb
+
+  rpm:
+    name: ${{ matrix.image }} (.rpm)
+    runs-on: ubuntu-24.04
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['fedora:43', 'fedora:44']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: packaging/build-package.sh
+      - name: Install and run
+        run: |
+          dnf install -y ./dist/*.rpm
+          QT_QPA_PLATFORM=offscreen camtune --help
+          test -x /usr/libexec/camtune-setup-v4l2loopback
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpm-${{ strategy.job-index }}
+          path: dist/*.rpm
+
+  arch:
+    name: Arch Linux (.pkg.tar.zst)
+    runs-on: ubuntu-24.04
+    container: archlinux:latest
+    steps:
+      - name: Install build tools
+        run: pacman -Syu --noconfirm --needed base-devel git cmake qt6-base libjpeg-turbo hicolor-icon-theme
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build with the PKGBUILD from this commit
+        run: |
+          git config --system --add safe.directory '*'
+          useradd -m builder
+          mkdir /pkg
+          # Same PKGBUILD as in the repo, but built from this checkout.
+          sed "s|^source=.*|source=(\"\$pkgname::git+file://$GITHUB_WORKSPACE#commit=$GITHUB_SHA\")|" \
+              packaging/arch/PKGBUILD > /pkg/PKGBUILD
+          chown -R builder /pkg
+          su builder -c 'cd /pkg && makepkg --noconfirm'
+      - name: Install and run
+        run: |
+          pacman -U --noconfirm /pkg/camtune-*.pkg.tar.zst
+          QT_QPA_PLATFORM=offscreen camtune --help
+          test -x /usr/lib/camtune/camtune-setup-v4l2loopback
+          mkdir -p dist && cp /pkg/camtune-*.pkg.tar.zst dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch
+          path: dist/*.pkg.tar.zst
+
+  appimage:
+    name: AppImage (any distribution)
+    runs-on: ubuntu-24.04
+    # Built on the oldest supported Ubuntu so it runs on older systems too.
+    container: ubuntu:22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: packaging/build-appimage.sh
+      - name: Run
+        run: |
+          cd dist && ./CamTune-*.AppImage --appimage-extract >/dev/null
+          QT_QPA_PLATFORM=offscreen squashfs-root/AppRun --help
+          rm -rf squashfs-root
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appimage
+          path: dist/*.AppImage
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [deb, rpm, arch, appimage]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the tag matches the version in CMakeLists.txt
+        run: |
+          version=$(sed -n 's/^project(CamTune VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME but CMakeLists.txt says $version"; exit 1; }
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum * > SHA256SUMS
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          body_path: packaging/RELEASE_NOTES.md

@@ -1,7 +1,10 @@
 # CamTune
 
 A lightweight, native Linux webcam control panel and virtual camera for video
-calls — a focused replacement for GUVCView/Webcamoid on Ubuntu and Fedora.
+calls — a focused replacement for GUVCView/Webcamoid. Packages for Ubuntu, Linux
+Mint, Debian, Fedora and Arch, plus an AppImage, are on the
+[Releases page](https://github.com/Dev-Png497/LinuxCameraAdjust/releases)
+(see [Installing](#installing)).
 
 ```
 Launch → webcam appears → adjust framing and color → enable virtual camera
@@ -137,7 +140,45 @@ Source layout:
 | `tools` | model converter (`.tflite` → `.camnn`), only needed to regenerate the model |
 | `tests` | unit tests, soak test, benchmark |
 
-## Building
+## Installing
+
+Download a package from the
+[Releases page](https://github.com/Dev-Png497/LinuxCameraAdjust/releases) and
+install it from the folder you saved it to:
+
+| System | Command |
+|---|---|
+| Ubuntu 22.04 / 24.04 / 26.04, Linux Mint 21 / 22, Pop!_OS, Zorin | `sudo apt install ./camtune_*_ubuntu-<version>_amd64.deb` |
+| Debian 12 / 13, LMDE | `sudo apt install ./camtune_*_debian-<version>_amd64.deb` |
+| Fedora 43 / 44 | `sudo dnf install ./camtune-*-fedora-<version>.x86_64.rpm` |
+| Arch Linux, EndeavourOS, Manjaro | `sudo pacman -U ./camtune-*-x86_64.pkg.tar.zst` |
+| Any other distribution | `chmod +x CamTune-*.AppImage && ./CamTune-*.AppImage` |
+
+Mint 21 uses the Ubuntu 22.04 package and Mint 22 the 24.04 one. Arch users can
+also build with [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) (`makepkg -si`).
+Then run **Tools → Set Up Virtual Camera…** once.
+
+### Making the packages
+
+The [Packages workflow](.github/workflows/packages.yml) builds and install-tests
+every package in clean containers. Pushing a tag that matches the version in
+`CMakeLists.txt` publishes them as a release:
+
+```sh
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+To build one locally, run the matching script in a container of that system:
+
+```sh
+docker run --rm -v "$PWD:/src" -w /src ubuntu:24.04 packaging/build-package.sh   # .deb
+docker run --rm -v "$PWD:/src" -w /src fedora:44    packaging/build-package.sh   # .rpm
+docker run --rm -v "$PWD:/src" -w /src ubuntu:22.04 packaging/build-appimage.sh  # AppImage
+```
+
+Results land in `dist/`.
+
+## Building from source
 
 Requirements: CMake ≥ 3.16, a C++17 compiler, Qt ≥ 6.2 (Widgets, OpenGL,
 OpenGLWidgets, DBus) and libjpeg-turbo.
