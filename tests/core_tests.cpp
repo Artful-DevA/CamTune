@@ -305,6 +305,13 @@ TEST(mjpeg_roundtrip)
     junk[0] = 0xFF;
     junk[1] = 0xD8;
     CHECK(!dec.decode(junk.data(), junk.size(), out, 1));
+    // Well-formed segments but no frame header (libjpeg-turbo 3.x would reuse
+    // the previous frame's header for this).
+    const uint8_t noFrame[] = {0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x04, 0x00, 0x00, 0xFF, 0xDA,
+                               0x00, 0x02, 0x55, 0x55, 0xFF, 0xD9};
+    CHECK(!dec.decode(noFrame, sizeof noFrame, out, 1));
+    // A good frame still decodes after the rejected ones.
+    CHECK(dec.decode(jpeg, jpegSize, out, 1));
 
     // Decoded output feeds the processor directly.
     Frame dst;

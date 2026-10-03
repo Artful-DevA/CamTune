@@ -3,7 +3,7 @@
 A lightweight, native Linux webcam control panel and virtual camera for video
 calls — a focused replacement for GUVCView/Webcamoid. Packages for Ubuntu, Linux
 Mint, Debian, Fedora and Arch, plus an AppImage, are on the
-[Releases page](https://github.com/Dev-Png497/LinuxCameraAdjust/releases)
+[Releases page](https://github.com/Artful-DevA/CamTune/releases)
 (see [Installing](#installing)).
 
 ```
@@ -143,7 +143,7 @@ Source layout:
 ## Installing
 
 Download a package from the
-[Releases page](https://github.com/Dev-Png497/LinuxCameraAdjust/releases) and
+[Releases page](https://github.com/Artful-DevA/CamTune/releases) and
 install it from the folder you saved it to:
 
 | System | Command |

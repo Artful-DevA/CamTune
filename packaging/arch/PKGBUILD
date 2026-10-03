@@ -1,10 +1,10 @@
-# Maintainer: Dev-Png497 <246381290+Dev-Png497@users.noreply.github.com>
+# Maintainer: Artful-DevA <246381290+Artful-DevA@users.noreply.github.com>
 pkgname=camtune
 pkgver=0.1.0
 pkgrel=1
 pkgdesc="Webcam controls and low-latency virtual camera for video calls"
 arch=('x86_64' 'aarch64')
-url="https://github.com/Dev-Png497/LinuxCameraAdjust"
+url="https://github.com/Artful-DevA/CamTune"
 license=('GPL-3.0-or-later')
 depends=('qt6-base' 'libjpeg-turbo' 'gcc-libs' 'glibc' 'hicolor-icon-theme')
 makedepends=('cmake' 'git')

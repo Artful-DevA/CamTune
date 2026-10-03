@@ -145,8 +145,8 @@ endif()
 # ---------------------------------------------------------------------------
 set(CPACK_PACKAGE_NAME camtune)
 set(CPACK_PACKAGE_VENDOR "CamTune")
-set(CPACK_PACKAGE_CONTACT "Dev-Png497 <246381290+Dev-Png497@users.noreply.github.com>")
-set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/Dev-Png497/LinuxCameraAdjust")
+set(CPACK_PACKAGE_CONTACT "Artful-DevA <246381290+Artful-DevA@users.noreply.github.com>")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/Artful-DevA/CamTune")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Webcam controls and low-latency virtual camera for video calls")
 set(CPACK_PACKAGE_DESCRIPTION
   "CamTune adjusts your webcam (exposure, focus, white balance, color, zoom and\nframing, background blur) and sends the result to a v4l2loopback virtual\ncamera that Zoom, Meet, Teams, Discord and OBS can use. Everything runs locally.")
