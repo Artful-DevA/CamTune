@@ -409,6 +409,7 @@ void CameraController::updatePlaceholder()
         text = tr("The camera is in use by another application");
         break;
     case cam::CameraState::Suspended:
+    case cam::CameraState::Idle:
         text = tr("Camera paused");
         break;
     case cam::CameraState::Error:

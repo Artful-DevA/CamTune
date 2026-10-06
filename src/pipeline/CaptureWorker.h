@@ -29,8 +29,11 @@ public:
     // Output size/rate used to choose a mode in automatic mode.
     void setTarget(int width, int height, int fps);
     void setSuspended(bool suspended);
-    // When inactive, frames are returned to the driver without decoding.
-    void setActive(bool active) { m_active.store(active); }
+    // Inactive: frames are dropped, and after a short grace period the device
+    // is closed so other applications can open the camera.
+    void setActive(bool active);
+    // True once the worker has been inactive for longer than the grace period.
+    bool shouldRelease() const;
     void setDecodeScale(int scale) { m_decodeScale.store(scale); }
     // Full-resolution size of the stream (before any reduced-scale decode).
     void sourceSize(int &w, int &h) const;
@@ -70,6 +73,7 @@ private:
     std::string m_currentPath;
 
     std::atomic<bool> m_active{true};
+    std::atomic<int64_t> m_inactiveSinceNs{0}; // monotonic time it became inactive, 0 while active
     std::atomic<int> m_decodeScale{1};
     std::atomic<int> m_srcW{0}, m_srcH{0};
     std::atomic<double> m_fps{0};

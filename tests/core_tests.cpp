@@ -10,6 +10,7 @@
 #include "core/MjpegDecoder.h"
 #include "core/Processor.h"
 #include "core/ThreadPool.h"
+#include "pipeline/Engine.h"
 #include "v4l2/V4l2Util.h"
 
 #include <linux/videodev2.h>
@@ -24,6 +25,7 @@
 #include <functional>
 #include <limits>
 #include <string>
+#include <thread>
 #include <vector>
 
 using namespace cam;
@@ -631,6 +633,60 @@ TEST(person_segmenter_runs)
     fx.setParams(e);
     fx.apply(f, pool);
     CHECK(fx.personDetectionAvailable());
+}
+
+// The camera must be released when neither the preview nor the virtual camera
+// uses it, so other applications (Zoom, the browser) can open it.
+TEST(engine_releases_camera_when_unused)
+{
+    std::atomic<int> state{-1};
+    EngineCallbacks cb;
+    cb.cameraState = [&](CameraState s, const std::string &) { state.store(int(s)); };
+    Engine engine(cb);
+    CameraSelection sel;
+    sel.testPattern = true;
+    OutputConfig out;
+    out.width = 320;
+    out.height = 240;
+    out.fps = 30;
+    out.enabled = false;
+    engine.setOutput(out);
+    engine.selectCamera(sel);
+    engine.setPreviewWanted(true);
+    engine.start();
+
+    auto waitFor = [&](CameraState want, int ms) {
+        for (int i = 0; i < ms / 20; ++i) {
+            if (state.load() == int(want))
+                return true;
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        return state.load() == int(want);
+    };
+    CHECK(waitFor(CameraState::Streaming, 2000));
+
+    // A brief hide (shorter than the grace period) keeps the camera.
+    engine.setPreviewWanted(false);
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    CHECK(state.load() == int(CameraState::Streaming));
+    engine.setPreviewWanted(true);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    CHECK(state.load() == int(CameraState::Streaming));
+
+    // Hidden with the virtual camera off: released after the grace period.
+    engine.setPreviewWanted(false);
+    CHECK(waitFor(CameraState::Idle, 3000));
+    // Showing the window again reopens it promptly.
+    engine.setPreviewWanted(true);
+    CHECK(waitFor(CameraState::Streaming, 1000));
+
+    // The virtual camera alone keeps the camera.
+    out.enabled = true;
+    engine.setOutput(out);
+    engine.setPreviewWanted(false);
+    std::this_thread::sleep_for(std::chrono::milliseconds(2500));
+    CHECK(state.load() == int(CameraState::Streaming));
+    engine.stop();
 }
 
 int main()

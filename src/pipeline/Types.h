@@ -46,7 +46,9 @@ struct CaptureRequest {
     }
 };
 
-enum class CameraState { NoCamera, Opening, Streaming, Waiting, Busy, Error, Suspended };
+// Idle: the camera was released because neither the preview nor the virtual
+// camera needs it, so other applications can use it.
+enum class CameraState { NoCamera, Opening, Streaming, Waiting, Busy, Error, Suspended, Idle };
 enum class OutputState { Disabled, NoDevice, Active, Error };
 
 struct ActiveMode {

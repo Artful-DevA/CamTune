@@ -1118,6 +1118,9 @@ void MainWindow::updateStatus()
     case cam::CameraState::Suspended:
         text = tr("Paused for system sleep");
         break;
+    case cam::CameraState::Idle:
+        text = tr("Camera released — free for other apps");
+        break;
     case cam::CameraState::NoCamera:
         text = tr("No camera");
         break;

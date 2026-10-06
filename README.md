@@ -246,8 +246,13 @@ Notes:
 
 - Leave CamTune running (closing the window keeps it in the tray). With
   *File → Preferences → Start CamTune when I log in* the virtual camera is always there.
-- With `exclusive_caps=1` the virtual camera is only advertised while Camera
-  Adjust is sending to it. If a call app was started first, re-open its camera
+- Only one app can use a webcam at a time. While CamTune's window is open or
+  the virtual camera is on, CamTune holds the webcam, so other apps must use the
+  **CamTune** camera; picking the real webcam there gives “camera in use”.
+  With the window closed to the tray and the virtual camera off, CamTune
+  releases the webcam after a moment and other apps can use it directly.
+- With `exclusive_caps=1` the virtual camera is only advertised while
+  CamTune is sending to it. If a call app was started first, re-open its camera
   menu (or restart its video) after enabling the virtual camera.
 - Call apps may still list the physical camera too; pick the virtual one. If a
   call app has grabbed the physical camera, CamTune shows “in use by

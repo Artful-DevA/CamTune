@@ -19,6 +19,7 @@ namespace cam {
 namespace {
 constexpr int kBufferCount = 4;
 constexpr int64_t kMs = 1000000;
+constexpr int64_t kIdleReleaseMs = 1500;
 } // namespace
 
 CaptureWorker::CaptureWorker(Mailbox<FramePtr> &output, Counters &counters, const EngineCallbacks &cb)
@@ -113,6 +114,22 @@ void CaptureWorker::setTarget(int width, int height, int fps)
             ++m_generation;
     }
     wake();
+}
+
+void CaptureWorker::setActive(bool active)
+{
+    if (m_active.exchange(active) == active)
+        return;
+    m_inactiveSinceNs.store(active ? 0 : monotonicNs());
+    wake();
+}
+
+bool CaptureWorker::shouldRelease() const
+{
+    if (m_active.load())
+        return false;
+    const int64_t since = m_inactiveSinceNs.load();
+    return since != 0 && monotonicNs() - since >= kIdleReleaseMs * kMs;
 }
 
 void CaptureWorker::setSuspended(bool suspended)
@@ -309,7 +326,7 @@ void CaptureWorker::runTestPattern(const Config &cfg, uint64_t generation)
     int64_t next = monotonicNs();
     uint64_t index = 0;
     for (;;) {
-        if (m_stop)
+        if (m_stop || shouldRelease())
             return;
         {
             std::lock_guard<std::mutex> lock(m_mutex);
@@ -375,6 +392,16 @@ void CaptureWorker::run()
         if (cfg.selection.empty()) {
             m_device.close();
             setState(CameraState::NoCamera, "No camera selected");
+            waitWake(1000);
+            continue;
+        }
+        // Hold the camera only while something uses it, so other applications
+        // can open it. The grace period keeps quick hide/show cycles cheap.
+        if (shouldRelease()) {
+            m_device.close();
+            m_output.clear();
+            needOpen = true;
+            setState(CameraState::Idle, "Camera released while not in use");
             waitWake(1000);
             continue;
         }

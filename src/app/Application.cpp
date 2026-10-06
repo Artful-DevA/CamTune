@@ -160,6 +160,7 @@ QString Application::statusText() const
     case cam::CameraState::Busy: cameraState = QStringLiteral("camera busy"); break;
     case cam::CameraState::Error: cameraState = QStringLiteral("error"); break;
     case cam::CameraState::Suspended: cameraState = QStringLiteral("suspended"); break;
+    case cam::CameraState::Idle: cameraState = QStringLiteral("idle (camera released)"); break;
     case cam::CameraState::NoCamera: cameraState = QStringLiteral("no camera"); break;
     }
     QString out;
