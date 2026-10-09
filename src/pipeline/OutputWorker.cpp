@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cstring>
 #include <pthread.h>
+#include <sys/stat.h>
 
 namespace cam {
 
@@ -144,11 +145,17 @@ void OutputWorker::run()
 
         int64_t now = monotonicNs();
         if (!m_out.isOpen() && now >= nextRetry) {
-            std::string path = cfg.devicePath.empty() ? autoDevicePath() : cfg.devicePath;
+            // A chosen device that no longer exists (module unloaded, kernel
+            // update, different number after a reboot) falls back to any
+            // loopback device rather than failing.
+            struct stat st {};
+            std::string path = cfg.devicePath;
+            if (path.empty() || ::stat(path.c_str(), &st) != 0)
+                path = autoDevicePath();
             if (path.empty()) {
                 setState(OutputState::NoDevice,
-                         "No virtual camera device found. The v4l2loopback kernel module is not loaded — use "
-                         "“Set up virtual camera…” in the Output section.");
+                         "The virtual camera is not available: the v4l2loopback kernel module is not loaded. "
+                         "Use Tools → Set Up Virtual Camera… to load it.");
                 nextRetry = now + 2000 * kMs;
             } else {
                 std::string err;

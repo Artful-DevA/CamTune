@@ -292,8 +292,16 @@ void MainWindow::buildToolBar()
     connect(m_presetCombo, qOverload<int>(&QComboBox::activated), this,
             [this](int idx) { m_app.applyPresetIndex(idx); });
     connect(m_vcamButton, &QToolButton::toggled, this, [this](bool on) {
-        if (!m_syncing)
-            m_ctl.setVirtualCameraEnabled(on);
+        if (m_syncing)
+            return;
+        // Nothing to start without a loopback device: offer the setup instead.
+        if (on && m_ctl.loopbackDevices().isEmpty()) {
+            QSignalBlocker b(m_vcamButton);
+            m_vcamButton->setChecked(m_ctl.output().enabled);
+            runVirtualCameraSetup();
+            return;
+        }
+        m_ctl.setVirtualCameraEnabled(on);
     });
 }
 
@@ -1074,7 +1082,8 @@ void MainWindow::updateBanner()
     }
     if (m_ctl.output().enabled && m_ctl.outputState() == cam::OutputState::NoDevice) {
         text += (text.isEmpty() ? QString() : QStringLiteral("\n")) +
-                tr("The virtual camera is not set up yet. Use Tools → Set Up Virtual Camera.");
+                tr("The virtual camera is not available (the v4l2loopback module is not loaded). "
+                   "Click the Virtual Camera button or use Tools → Set Up Virtual Camera… to fix it.");
     } else if (m_ctl.output().enabled && m_ctl.outputState() == cam::OutputState::Error) {
         text += (text.isEmpty() ? QString() : QStringLiteral("\n")) + m_ctl.outputMessage();
         level = QStringLiteral("error");
@@ -1135,6 +1144,10 @@ void MainWindow::updateStatus()
         int w, h;
         m_ctl.renderSize(w, h);
         m_outputInfo->setText(tr("Virtual camera %1×%2 · %3 fps").arg(w).arg(h).arg(s.outputFps, 0, 'f', 1));
+    } else if (m_ctl.output().enabled && m_ctl.outputState() == cam::OutputState::NoDevice) {
+        m_outputInfo->setText(tr("Virtual camera: setup needed"));
+    } else if (m_ctl.output().enabled && m_ctl.outputState() == cam::OutputState::Error) {
+        m_outputInfo->setText(tr("Virtual camera: error"));
     } else {
         m_outputInfo->setText(tr("Virtual camera off"));
     }

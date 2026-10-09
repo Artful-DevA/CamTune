@@ -30,7 +30,10 @@ die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 install_package() {
     if command -v apt-get >/dev/null 2>&1; then
         say "Installing v4l2loopback-dkms with apt…"
-        DEBIAN_FRONTEND=noninteractive apt-get install -y v4l2loopback-dkms
+        # DKMS builds the module against the running kernel's headers; without
+        # them (e.g. right after a kernel update) nothing gets built.
+        DEBIAN_FRONTEND=noninteractive apt-get install -y v4l2loopback-dkms "linux-headers-$(uname -r)" ||
+            DEBIAN_FRONTEND=noninteractive apt-get install -y v4l2loopback-dkms
     elif command -v dnf >/dev/null 2>&1; then
         say "Installing v4l2loopback with dnf (requires RPM Fusion free)…"
         if ! dnf install -y v4l2loopback; then
@@ -46,6 +49,12 @@ install_package() {
         pacman -S --noconfirm v4l2loopback-dkms
     else
         die "unknown package manager; install v4l2loopback manually"
+    fi
+    # An already-installed DKMS package is not rebuilt by the package manager
+    # after a kernel update; build it for the running kernel now.
+    if command -v dkms >/dev/null 2>&1 && ! modinfo v4l2loopback >/dev/null 2>&1; then
+        say "Building v4l2loopback for kernel $(uname -r)…"
+        dkms autoinstall -k "$(uname -r)" || true
     fi
 }
 
@@ -66,7 +75,8 @@ case "${1:-}" in
 esac
 
 if ! modinfo v4l2loopback >/dev/null 2>&1; then
-    say "The v4l2loopback kernel module is not installed."
+    say "The v4l2loopback kernel module is not installed for the running kernel ($(uname -r))."
+    say "Choose “Install & Set Up” to install or rebuild it, or install it yourself:"
     say "  Ubuntu/Debian: apt install v4l2loopback-dkms"
     say "  Fedora:        enable RPM Fusion, then dnf install v4l2loopback"
     exit 2
